@@ -1,7 +1,7 @@
 # app/bot/handlers.py
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from sqlalchemy import text
 from app.database import AsyncSessionLocal
@@ -229,11 +229,17 @@ async def _render_prompt(
     step = prompt.get("step")
 
     if step == SessionStep.SELECT_EXAM.value:
+        # Reply keyboard, not inline: an inline button press never appears as
+        # a message in the chat at all (just a silent callback) — a reply
+        # keyboard button sends its label as a genuine text message from the
+        # user, which _resolve_exam_node already resolves correctly via its
+        # existing exact-name-match step (the same path free-typing the exam
+        # name has always used), so no graph-side change is needed here.
         exams = await ctx.exam_resolver.get_all_active_exams()
-        buttons = [[InlineKeyboardButton(e["name"], callback_data=f"exam_{e['id']}")] for e in exams]
+        buttons = [[e["name"]] for e in exams]
         await ctx.telegram_service.send_message(
             chat_id=chat_id, text=prompt["message"],
-            reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
+            reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=True) if buttons else None
         )
 
     elif step == SessionStep.SELECT_QUESTION_COUNT.value:
@@ -241,11 +247,10 @@ async def _render_prompt(
 
     elif step == SessionStep.SELECT_CHAPTER.value:
         options = prompt.get("options") or []
-        buttons = [[InlineKeyboardButton("Overall", callback_data="chapter_overall")]]
-        for opt in options[:30]:
-            buttons.append([InlineKeyboardButton(opt["name"], callback_data=f"chapter_{opt['id']}")])
+        buttons = [["Overall"]] + [[opt["name"]] for opt in options[:30]]
         await ctx.telegram_service.send_message(
-            chat_id=chat_id, text=prompt["message"], reply_markup=InlineKeyboardMarkup(buttons)
+            chat_id=chat_id, text=prompt["message"],
+            reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=True)
         )
 
     elif step == SessionStep.SELECT_DURATION.value:
