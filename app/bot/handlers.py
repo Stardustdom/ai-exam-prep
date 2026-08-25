@@ -23,19 +23,72 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await _handle_turn(update, context, "start", force_restart=True)
 
 
-# Recognized ANYWHERE, mid-flow, as "end the session right now" — an exact
-# match after stripping/lowercasing (not a substring check), so a chapter
-# name or free-text answer that merely contains one of these words can't
-# accidentally trigger it.
-_EXIT_PHRASES = {"bye", "exit", "quit", "end", "stop", "cancel", "/end", "goodbye", "bye bye", "see you"}
-
-
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = (update.message.text or "").strip().lower()
-    if text in _EXIT_PHRASES:
+    intent = await _classify_message_intent(update.message.text or "", update)
+    if intent == "exit":
         await _handle_exit(update, context)
         return
+    if intent == "start":
+        # A greeting ("hi"/"hello"/...) means the same thing /start does —
+        # give a clean slate, mid-conversation or not.
+        await _handle_turn(update, context, "start", force_restart=True)
+        return
     await _handle_turn(update, context, update.message.text)
+
+
+# Steps where free text IS the answer being evaluated (a real curriculum
+# name can legitimately be one short word — "Sets", "Probability"). The
+# LLM-backed fallback in classify_intent is specifically shaped to catch
+# short, ambiguous phrases, which makes it also the shape most likely to
+# collide with a real selection here — so it's skipped entirely while one
+# of these menus is active. The hardcoded exact-match phrases (a literal
+# "bye" or "hi") still apply even then, since no real curriculum entry
+# collides with those specific words.
+_MENU_ACTIVE_STEPS = {SessionStep.SELECT_EXAM.value, SessionStep.SELECT_CHAPTER.value}
+
+
+async def _classify_message_intent(raw_text: str, update: Update) -> str:
+    from app.agents.intent_classifier import classify_intent, EXIT_PHRASES, START_PHRASES
+
+    normalized = raw_text.strip().lower()
+    if normalized in EXIT_PHRASES:
+        return "exit"
+    if normalized in START_PHRASES:
+        return "start"
+    if not normalized or len(normalized.split()) > 3:
+        return "other"  # cheap guard, matches classify_intent's own — skip opening a session at all
+
+    telegram_user = update.effective_user
+    chat_id = update.effective_chat.id
+    try:
+        async with AsyncSessionLocal() as db:
+            ctx = build_context(db)
+            state = ExamSessionState(telegram_chat_id=str(chat_id))
+            state = await ctx.session_manager.initialize_session(
+                state, telegram_user_id=str(telegram_user.id), telegram_chat_id=str(chat_id),
+                username=telegram_user.username, first_name=telegram_user.first_name, last_name=telegram_user.last_name
+            )
+            if state.error:
+                return "other"
+
+            prompt = await ctx.graph.get_prompt(state.session_id)
+            if (prompt or {}).get("step") in _MENU_ACTIVE_STEPS:
+                return "other"
+
+            from app.services.embeddings import EmbeddingService
+            from app.services.semantic_cache import SemanticCacheService
+            from app.services.llm import LLMService
+            from app.database.repositories import SemanticCacheRepository
+            cache_service = SemanticCacheService(SemanticCacheRepository(db), EmbeddingService())
+            return await classify_intent(raw_text, LLMService(), cache_service)
+    except Exception as e:
+        # Best-effort enhancement, not core functionality — any failure here
+        # (including the checkpointer's known Neon-connection-death class of
+        # error, which _run_graph_turn recovers from but this path doesn't
+        # duplicate that retry logic for) must fall back to normal message
+        # processing, never block or crash on the user's actual message.
+        logger.warning(f"Intent classification pre-check failed for chat {chat_id}, defaulting to 'other': {e}")
+        return "other"
 
 
 async def _handle_exit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
