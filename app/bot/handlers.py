@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.database import AsyncSessionLocal
 from app.bot.dependencies import build_context
 from app.agents.state import ExamSessionState, SessionStep
+from app.graph.checkpointer import is_connection_error, reinit_checkpointer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -132,19 +133,8 @@ async def _handle_turn(
 
         thread_id = state.session_id
 
-        if force_restart:
-            _cancel_timer_tick(context, thread_id)  # abandon any in-progress quiz's live-timer job
-            await _purge_thread_checkpoint(ctx.db, thread_id)  # drop any paused/pending task for this thread
-            awaiting = False
-        else:
-            awaiting = await ctx.graph.is_awaiting_input(thread_id)
-            graph_input = await _resolve_graph_input(ctx, thread_id, raw_input, is_callback)
-
         try:
-            if awaiting:
-                result = await ctx.graph.resume(thread_id, graph_input)
-            else:
-                result = await ctx.graph.start(state)
+            result = await _run_graph_turn(db, chat_id, state, thread_id, raw_input, is_callback, force_restart, context)
         except Exception as e:
             logger.error(f"Graph execution failed for chat {chat_id}: {e}")
             await ctx.telegram_service.send_message(
@@ -154,6 +144,47 @@ async def _handle_turn(
             return
 
         await _render(ctx, chat_id, result, update, context, thread_id)
+
+
+async def _run_graph_turn(
+    db, chat_id: int, state: ExamSessionState, thread_id: str,
+    raw_input: str, is_callback: bool, force_restart: bool,
+    context: ContextTypes.DEFAULT_TYPE
+) -> Dict[str, Any]:
+    """Runs is_awaiting_input -> resolve_input -> graph.start/resume,
+    retrying once with a freshly reinitialized checkpointer if it fails on
+    what looks like a dead Neon connection. AsyncPostgresSaver (the
+    checkpointer) opens one long-lived connection at startup with no
+    equivalent to app.database's pool_pre_ping — Neon closing that
+    connection (free-tier idle suspend, or an admin-initiated restart even
+    on an active project) previously left every /start and every quiz
+    action failing with a generic "something went wrong" until someone
+    manually restarted the whole Render service. build_context() is cheap
+    (just wires up repos/agents against the existing db session and
+    whatever checkpointer get_checkpointer() currently returns), so
+    rebuilding it each attempt costs nothing but picks up the reinitialized
+    checkpointer on retry."""
+    for attempt in range(2):
+        ctx = build_context(db)
+        try:
+            if force_restart:
+                _cancel_timer_tick(context, thread_id)  # abandon any in-progress quiz's live-timer job
+                await _purge_thread_checkpoint(ctx.db, thread_id)  # drop any paused/pending task for this thread
+                awaiting = False
+                graph_input = None
+            else:
+                awaiting = await ctx.graph.is_awaiting_input(thread_id)
+                graph_input = await _resolve_graph_input(ctx, thread_id, raw_input, is_callback)
+
+            if awaiting:
+                return await ctx.graph.resume(thread_id, graph_input)
+            return await ctx.graph.start(state)
+        except Exception as e:
+            if attempt == 0 and is_connection_error(e):
+                logger.warning(f"Checkpointer connection error for chat {chat_id}, reinitializing and retrying once: {e}")
+                await reinit_checkpointer()
+                continue
+            raise
 
 
 async def _purge_thread_checkpoint(db, thread_id: str) -> None:

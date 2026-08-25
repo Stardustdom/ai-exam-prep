@@ -49,6 +49,43 @@ def get_checkpointer() -> BaseCheckpointSaver:
 async def close_checkpointer() -> None:
     global _checkpointer, _exit_stack
     if _exit_stack is not None:
-        await _exit_stack.aclose()
+        try:
+            await _exit_stack.aclose()
+        except Exception:
+            pass  # the connection we're closing may itself already be dead
     _checkpointer = None
     _exit_stack = None
+
+
+async def reinit_checkpointer() -> BaseCheckpointSaver:
+    """Tear down and rebuild the checkpointer's connection pool. Unlike
+    app.database's SQLAlchemy engine (pool_pre_ping=True heals this
+    automatically), AsyncPostgresSaver opens one long-lived connection at
+    startup with no equivalent self-healing — Neon (free tier: idle
+    auto-suspend, and periodic admin-initiated connection termination even
+    on an active project) killing that connection left every subsequent
+    graph call failing until the whole process restarted. Called from
+    app.bot.handlers on a detected connection error; safe to call
+    concurrently from multiple in-flight requests since it only ever
+    swaps the module-level reference, and get_checkpointer() picks up
+    whatever's currently there."""
+    await close_checkpointer()
+    return await init_checkpointer()
+
+
+_CONNECTION_ERROR_MARKERS = (
+    "connection is closed", "connection was closed", "terminating connection",
+    "connection reset", "connection refused", "ssl connection has been closed",
+    "server closed the connection", "could not connect", "connection does not exist",
+)
+
+
+def is_connection_error(exc: BaseException) -> bool:
+    """String-matched, not exception-type-matched: the underlying driver
+    (asyncpg for app.database, psycopg for the checkpointer) each raise
+    their own distinct exception classes for the same real-world failure
+    (Neon killing a connection), and both wrap/re-raise through several
+    layers (SQLAlchemy, psycopg_pool) — matching the message is far more
+    reliable here than trying to enumerate every wrapper type."""
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _CONNECTION_ERROR_MARKERS)
