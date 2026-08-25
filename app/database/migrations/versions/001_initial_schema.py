@@ -22,6 +22,17 @@ EMBEDDING_DIMENSION = 1536
 
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    # Enum labels are UPPERCASE (member NAMEs, not .value) to match what
+    # app.database.models actually produces: `Enum(ProcessingStatus)` is
+    # given the raw Python enum class with no `values_callable`, so
+    # SQLAlchemy's default behavior stores each member's .name at the DDL
+    # level. A prior version of this file used lowercase .value strings
+    # instead, matching neither local dev's actual database (built via
+    # create_all(), which follows that same SQLAlchemy default) nor what a
+    # live app writing through the ORM would ever try to insert — every
+    # resource-status write against a migration-built database would have
+    # failed with "invalid input value for enum processingstatus" the first
+    # time anything set a real status, not just during a data migration.
     # `processingstatus` is shared by two tables below (resources, sample_papers).
     # No explicit CREATE TYPE here — the first column definition that uses it
     # (resources.status, `create_type` left at its default) creates it; the
@@ -83,7 +94,7 @@ def upgrade() -> None:
         sa.Column('mime_type', sa.String(100)),
         sa.Column('checksum', sa.String(64)),
         sa.Column('version', sa.Integer, default=1),
-        sa.Column('status', sa.Enum('uploaded', 'queued', 'processing', 'extracting_text', 'chunking', 'embedding', 'extracting_structure', 'completed', 'failed', name='processingstatus')),
+        sa.Column('status', sa.Enum('UPLOADED', 'QUEUED', 'PROCESSING', 'EXTRACTING_TEXT', 'CHUNKING', 'EMBEDDING', 'EXTRACTING_STRUCTURE', 'COMPLETED', 'FAILED', name='processingstatus')),
         sa.Column('status_message', sa.Text),
         sa.Column('extra_data', JSON),
         sa.Column('processed_at', sa.DateTime),
@@ -168,7 +179,7 @@ def upgrade() -> None:
         sa.Column('mime_type', sa.String(100)),
         sa.Column('checksum', sa.String(64)),
         sa.Column('year', sa.Integer),
-        sa.Column('status', sa.Enum('uploaded', 'queued', 'processing', 'extracting_text', 'chunking', 'embedding', 'extracting_structure', 'completed', 'failed', name='processingstatus', create_type=False)),
+        sa.Column('status', sa.Enum('UPLOADED', 'QUEUED', 'PROCESSING', 'EXTRACTING_TEXT', 'CHUNKING', 'EMBEDDING', 'EXTRACTING_STRUCTURE', 'COMPLETED', 'FAILED', name='processingstatus', create_type=False)),
         sa.Column('status_message', sa.Text),
         sa.Column('extra_data', JSON),
         sa.Column('processed_at', sa.DateTime),
