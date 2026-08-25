@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Exam Platform · Admin</title>
+    <style>
+      :root {
+        --ink: #14151a;
+        --panel: #1c1d24;
+        --panel-2: #23242c;
+        --bg: #f6f6f3;
+        --card: #ffffff;
+        --line: #e4e3dd;
+        --text: #1b1c20;
+        --muted: #6b6d76;
+        --muted-2: #9a9ca3;
+        --accent: #5b5fef;
+        --accent-ink: #ffffff;
+        --ok: #1f8a5f;
+        --ok-bg: #e8f6ef;
+        --warn: #a6690a;
+        --warn-bg: #fbf0dc;
+        --bad: #c23a3a;
+        --bad-bg: #fbe9e9;
+        --queued: #5b5fef;
+        --queued-bg: #ececfe;
+        --mono:
+          ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+          Helvetica, Arial, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: var(--sans);
+        background: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+      button {
+        font-family: inherit;
+      }
+      ::selection {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      /* ---------- login ---------- */
+      #login-screen {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(
+            600px 400px at 15% 10%,
+            rgba(91, 95, 239, 0.1),
+            transparent 60%
+          ),
+          radial-gradient(
+            500px 400px at 85% 90%,
+            rgba(91, 95, 239, 0.08),
+            transparent 60%
+          ),
+          var(--ink);
+      }
+      .login-card {
+        width: 360px;
+        background: var(--panel-2);
+        border: 1px solid #2f303a;
+        border-radius: 14px;
+        padding: 32px;
+        box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.5);
+      }
+      .login-mark {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 700;
+        font-size: 15px;
+        margin-bottom: 18px;
+        letter-spacing: 0.02em;
+      }
+      .login-card h1 {
+        font-size: 17px;
+        margin: 0 0 4px;
+        color: #fff;
+        letter-spacing: -0.01em;
+      }
+      .login-card p {
+        font-size: 13px;
+        color: #9a9ca3;
+        margin: 0 0 22px;
+      }
+      .field {
+        margin-bottom: 14px;
+      }
+      .field label {
+        display: block;
+        font-size: 11.5px;
+        color: #9a9ca3;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 600;
+      }
+      .field input {
+        width: 100%;
+        background: #14151a;
+        border: 1px solid #34353f;
+        color: #fff;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .field input:focus {
+        border-color: var(--accent);
+      }
+      .btn {
+        appearance: none;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 13.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          filter 0.12s,
+          transform 0.05s;
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+        width: 100%;
+      }
+      .btn-primary:hover {
+        filter: brightness(1.08);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid var(--line);
+      }
+      .btn-ghost:hover {
+        color: var(--text);
+        border-color: #c9c8c0;
+      }
+      .btn-danger {
+        background: var(--bad-bg);
+        color: var(--bad);
+      }
+      .btn-danger:hover {
+        filter: brightness(0.97);
+      }
+      .btn-sm {
+        padding: 6px 11px;
+        font-size: 12.5px;
+        border-radius: 7px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .login-error {
+        margin-top: 14px;
+        font-size: 12.5px;
+        color: #ff9d9d;
+        background: rgba(194, 58, 58, 0.15);
+        border: 1px solid rgba(194, 58, 58, 0.3);
+        padding: 8px 10px;
+        border-radius: 7px;
+        display: none;
+      }
+
+      /* ---------- app shell ---------- */
+      #app {
+        display: none;
+        min-height: 100vh;
+        grid-template-columns: 220px 1fr;
+      }
+      #app.on {
+        display: grid;
+      }
+      aside {
+        background: var(--ink);
+        color: #fff;
+        padding: 20px 14px;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 8px 22px;
+      }
+      .brand .mark {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: var(--accent);
+        flex: none;
+      }
+      .brand span {
+        font-size: 13.5px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .nav-label {
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #6d6f7a;
+        padding: 14px 10px 6px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        border-radius: 7px;
+        font-size: 13.5px;
+        color: #c7c8ce;
+        cursor: pointer;
+        margin-bottom: 2px;
+      }
+      .nav-item:hover {
+        background: #22232b;
+        color: #fff;
+      }
+      .nav-item.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      .exam-list {
+        overflow-y: auto;
+        flex: 1;
+      }
+      aside .spacer {
+        flex: 1;
+      }
+      .signout {
+        font-size: 12.5px;
+        color: #83848d;
+        cursor: pointer;
+        padding: 8px 10px;
+      }
+      .signout:hover {
+        color: #fff;
+      }
+
+      main {
+        padding: 28px 34px 60px;
+        max-width: 1080px;
+      }
+      .page-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 22px;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .page-head h2 {
+        font-size: 20px;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 26px;
+      }
+      .stat-card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+      .stat-card .n {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .stat-card .l {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 18px;
+      }
+      .card h3 {
+        font-size: 14.5px;
+        margin: 0 0 14px;
+        letter-spacing: -0.005em;
+      }
+      .card h3 .cnt {
+        color: var(--muted-2);
+        font-weight: 500;
+      }
+
+      .empty {
+        font-size: 13px;
+        color: var(--muted-2);
+        padding: 10px 2px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th {
+        text-align: left;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted-2);
+        font-weight: 600;
+        padding: 0 10px 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      td {
+        padding: 10px;
+        border-bottom: 1px solid #f0efe9;
+        vertical-align: middle;
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      td.actions {
+        text-align: right;
+        white-space: nowrap;
+      }
+      td.actions .btn-sm {
+        margin-left: 6px;
+      }
+      .fname {
+        font-weight: 600;
+      }
+      .fmeta {
+        color: var(--muted-2);
+        font-size: 11.5px;
+        margin-top: 2px;
+      }
+
+      .pill {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 99px;
+        letter-spacing: 0.01em;
+        text-transform: capitalize;
+      }
+      .pill-ok {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .pill-warn {
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+      .pill-bad {
+        background: var(--bad-bg);
+        color: var(--bad);
+      }
+      .pill-queued {
+        background: var(--queued-bg);
+        color: var(--queued);
+      }
+
+      .upload-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .upload-row input[type="file"] {
+        font-size: 12.5px;
+        flex: 1;
+      }
+
+      .exam-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .exam-form .full {
+        grid-column: 1/-1;
+      }
+      .exam-form label {
+        display: block;
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-bottom: 5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .exam-form input,
+      .exam-form textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 11px;
+        font-size: 13.5px;
+        font-family: inherit;
+        outline: none;
+        background: #fcfcfa;
+      }
+      .exam-form input:focus,
+      .exam-form textarea:focus {
+        border-color: var(--accent);
+        background: #fff;
+      }
+      .exam-form textarea {
+        resize: vertical;
+        min-height: 56px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 2px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 20px;
+      }
+      .tab {
+        padding: 9px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+      }
+      .tab.active {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+
+      .tree ul {
+        list-style: none;
+        margin: 0;
+        padding-left: 18px;
+      }
+      .tree > ul {
+        padding-left: 0;
+      }
+      .tree li {
+        margin: 3px 0;
+        font-size: 13px;
+      }
+      .tree .subj {
+        font-weight: 700;
+        font-size: 13.5px;
+      }
+      .tree .chap {
+        color: var(--text);
+      }
+      .tree .topic {
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+
+      .bp-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 7px 0;
+        border-bottom: 1px solid #f0efe9;
+        font-size: 13px;
+      }
+      .bp-row:last-child {
+        border-bottom: none;
+      }
+      .bp-bar {
+        background: #eeede7;
+        border-radius: 5px;
+        height: 6px;
+        width: 120px;
+        overflow: hidden;
+      }
+      .bp-bar span {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+      }
+
+      .toast {
+        position: fixed;
+        bottom: 22px;
+        right: 22px;
+        background: var(--ink);
+        color: #fff;
+        padding: 11px 16px;
+        border-radius: 9px;
+        font-size: 13px;
+        box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        transform: translateY(8px);
+        transition: 0.18s;
+        pointer-events: none;
+        z-index: 50;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .toast.bad {
+        background: #5c1f1f;
+      }
+
+      code.mono {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .loading {
+        font-size: 13px;
+        color: var(--muted-2);
+        padding: 16px 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- LOGIN -->
+    <div id="login-screen">
+      <div class="login-card">
+        <div class="login-mark">EP</div>
+        <h1>Admin sign in</h1>
+        <p>Exam Preparation Platform</p>
+        <div class="field">
+          <label>Username</label>
+          <input
+            id="login-user"
+            type="text"
+            autocomplete="username"
+            value="admin"
+          />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input
+            id="login-pass"
+            type="password"
+            autocomplete="current-password"
+          />
+        </div>
+        <button class="btn btn-primary" id="login-btn">Sign in</button>
+        <div class="login-error" id="login-error"></div>
+      </div>
+    </div>
+
+    <!-- APP -->
+    <div id="app">
+      <aside>
+        <div class="brand">
+          <div class="mark"></div>
+          <span>Exam Platform</span>
+        </div>
+        <div class="nav-item active" data-nav="dashboard">Dashboard</div>
+        <div class="nav-item" data-nav="new-exam">+ New exam</div>
+        <div class="nav-label">Exams</div>
+        <div class="exam-list" id="exam-list"></div>
+        <div class="spacer"></div>
+        <div class="signout" id="signout">Sign out</div>
+      </aside>
+
+      <main>
+        <!-- DASHBOARD -->
+        <section id="page-dashboard">
+          <div class="page-head">
+            <div>
+              <h2>Dashboard</h2>
+              <div class="sub">Platform-wide overview</div>
+            </div>
+          </div>
+          <div class="stat-grid" id="stat-grid">
+            <div class="loading">Loading stats…</div>
+          </div>
+        </section>
+
+        <!-- NEW EXAM -->
+        <section id="page-new-exam" style="display: none">
+          <div class="page-head">
+            <div>
+              <h2>Create exam</h2>
+              <div class="sub">
+                Exams are exam-agnostic — add any type (JEE, NEET, custom…)
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="exam-form">
+              <div>
+                <label>Exam name</label
+                ><input id="ne-name" placeholder="Joint Entrance Examination" />
+              </div>
+              <div>
+                <label>Short name</label
+                ><input id="ne-short" placeholder="JEE" />
+              </div>
+              <div class="full">
+                <label>Description</label
+                ><textarea
+                  id="ne-desc"
+                  placeholder="Optional description"
+                ></textarea>
+              </div>
+              <div class="full">
+                <label>Subjects (comma separated, optional)</label
+                ><input
+                  id="ne-subjects"
+                  placeholder="Physics, Chemistry, Mathematics"
+                />
+              </div>
+            </div>
+            <div style="margin-top: 16px">
+              <button class="btn btn-primary" id="ne-submit">
+                Create exam
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- EXAM DETAIL -->
+        <section id="page-exam" style="display: none">
+          <div class="page-head">
+            <div>
+              <h2 id="ex-title">Exam</h2>
+              <div class="sub" id="ex-sub">—</div>
+            </div>
+            <span class="pill" id="ex-status-pill"></span>
+          </div>
+
+          <div class="tabs">
+            <div class="tab active" data-tab="resources">Resources</div>
+            <div class="tab" data-tab="papers">Sample papers</div>
+            <div class="tab" data-tab="blueprint">Blueprint</div>
+            <div class="tab" data-tab="curriculum">Curriculum</div>
+          </div>
+
+          <div class="tab-panel active" id="tab-resources">
+            <div class="card">
+              <h3>Upload study resources</h3>
+              <div class="upload-row">
+                <input
+                  type="file"
+                  id="res-file"
+                  accept=".pdf,.doc,.docx,.txt"
+                />
+                <button class="btn btn-primary btn-sm" id="res-upload-btn">
+                  Upload
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Resources <span class="cnt" id="res-count"></span></h3>
+              <div id="res-table"></div>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-papers">
+            <div class="card">
+              <h3>Upload sample / past question papers</h3>
+              <div class="upload-row">
+                <input
+                  type="file"
+                  id="paper-file"
+                  accept=".pdf,.doc,.docx,.txt"
+                />
+                <button class="btn btn-primary btn-sm" id="paper-upload-btn">
+                  Upload
+                </button>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Sample papers <span class="cnt" id="paper-count"></span></h3>
+              <div id="paper-table"></div>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-blueprint">
+            <div class="card">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 14px;
+                "
+              >
+                <h3 style="margin: 0">Exam blueprint</h3>
+                <button class="btn btn-ghost btn-sm" id="bp-regen">
+                  Regenerate
+                </button>
+              </div>
+              <div id="bp-body">
+                <div class="empty">
+                  No blueprint yet — upload sample papers to generate one.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-curriculum">
+            <div class="card">
+              <h3>Extracted curriculum</h3>
+              <div id="curr-body">
+                <div class="empty">
+                  No curriculum extracted yet — upload and process resources
+                  first.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const API = ""; // relative to /admin/, so "api/..." resolves to /admin/api/...
+      let TOKEN = localStorage.getItem("admin_token") || "";
+      let EXAMS = [];
+      let CURRENT_EXAM = null;
+
+      function toast(msg, bad) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.className = "toast show" + (bad ? " bad" : "");
+        setTimeout(() => t.classList.remove("show"), 2600);
+      }
+
+      async function api(path, opts = {}) {
+        opts.headers = Object.assign({}, opts.headers, {
+          Authorization: "Bearer " + TOKEN,
+        });
+        const res = await fetch("api/" + path.replace(/^\//, ""), opts);
+        if (res.status === 401) {
+          logout();
+          throw new Error("Session expired");
+        }
+        if (!res.ok) {
+          let detail = res.statusText;
+          try {
+            detail = (await res.json()).detail || detail;
+          } catch (e) {}
+          throw new Error(detail);
+        }
+        if (res.status === 204) return null;
+        return res.json();
+      }
+
+      function esc(s) {
+        return (s ?? "")
+          .toString()
+          .replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              })[c],
+          );
+      }
+
+      function statusPill(status) {
+        const s = (status || "").toLowerCase();
+        let cls = "pill-queued";
+        if (s === "completed") cls = "pill-ok";
+        else if (s === "failed") cls = "pill-bad";
+        else if (["uploaded", "queued"].includes(s)) cls = "pill-queued";
+        else cls = "pill-warn"; // processing / extracting_text / chunking / embedding / extracting_structure
+        return `<span class="pill ${cls}">${esc(status)}</span>`;
+      }
+
+      /* ---------------- auth ---------------- */
+      document.getElementById("login-btn").onclick = doLogin;
+      document.getElementById("login-pass").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doLogin();
+      });
+
+      async function doLogin() {
+        const username = document.getElementById("login-user").value.trim();
+        const password = document.getElementById("login-pass").value;
+        const errBox = document.getElementById("login-error");
+        errBox.style.display = "none";
+        try {
+          const res = await fetch("api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          if (!res.ok)
+            throw new Error((await res.json()).detail || "Invalid credentials");
+          const data = await res.json();
+          TOKEN = data.access_token;
+          localStorage.setItem("admin_token", TOKEN);
+          boot();
+        } catch (e) {
+          errBox.textContent = e.message;
+          errBox.style.display = "block";
+        }
+      }
+
+      function logout() {
+        TOKEN = "";
+        localStorage.removeItem("admin_token");
+        document.getElementById("app").classList.remove("on");
+        document.getElementById("login-screen").style.display = "flex";
+      }
+      document.getElementById("signout").onclick = logout;
+
+      /* ---------------- nav ---------------- */
+      document.querySelectorAll("aside > .nav-item").forEach((el) => {
+        el.onclick = () => {
+          document
+            .querySelectorAll("aside > .nav-item")
+            .forEach((n) => n.classList.remove("active"));
+          el.classList.add("active");
+          document
+            .querySelectorAll("#exam-list .nav-item")
+            .forEach((n) => n.classList.remove("active"));
+          showPage(el.dataset.nav === "new-exam" ? "new-exam" : "dashboard");
+        };
+      });
+
+      function showPage(name) {
+        document.getElementById("page-dashboard").style.display =
+          name === "dashboard" ? "block" : "none";
+        document.getElementById("page-new-exam").style.display =
+          name === "new-exam" ? "block" : "none";
+        document.getElementById("page-exam").style.display =
+          name === "exam" ? "block" : "none";
+        if (name === "dashboard") loadDashboard();
+      }
+
+      /* ---------------- dashboard ---------------- */
+      async function loadDashboard() {
+        const grid = document.getElementById("stat-grid");
+        try {
+          const s = await api("dashboard/stats");
+          const items = [
+            ["Exams", s.total_exams],
+            ["Resources", s.total_resources],
+            ["Sample papers", s.total_sample_papers],
+            ["Processing", s.processing_resources],
+            ["Completed", s.completed_resources],
+            ["Failed", s.failed_resources],
+            ["Subjects", s.extracted_subjects],
+            ["Chapters", s.extracted_chapters],
+            ["Topics", s.extracted_topics],
+            ["Quizzes", s.total_quizzes],
+            ["Users", s.total_users],
+            ["Attempts", s.quiz_attempts],
+          ];
+          grid.innerHTML = items
+            .map(
+              ([l, n]) =>
+                `<div class="stat-card"><div class="n">${n ?? 0}</div><div class="l">${l}</div></div>`,
+            )
+            .join("");
+        } catch (e) {
+          grid.innerHTML = `<div class="empty">Couldn't load stats — ${esc(e.message)}</div>`;
+        }
+      }
+
+      /* ---------------- exams ---------------- */
+      async function loadExams() {
+        EXAMS = await api("exams");
+        const list = document.getElementById("exam-list");
+        if (!EXAMS.length) {
+          list.innerHTML = `<div class="empty" style="color:#6d6f7a">No exams yet</div>`;
+          return;
+        }
+        list.innerHTML = EXAMS.map(
+          (ex) =>
+            `<div class="nav-item" data-exam="${ex.id}">${esc(ex.short_name)}</div>`,
+        ).join("");
+        list.querySelectorAll("[data-exam]").forEach((el) => {
+          el.onclick = () => {
+            document
+              .querySelectorAll("aside .nav-item")
+              .forEach((n) => n.classList.remove("active"));
+            el.classList.add("active");
+            openExam(el.dataset.exam);
+          };
+        });
+      }
+
+      document.getElementById("ne-submit").onclick = async () => {
+        const name = document.getElementById("ne-name").value.trim();
+        const short_name = document.getElementById("ne-short").value.trim();
+        const description =
+          document.getElementById("ne-desc").value.trim() || null;
+        const subjectsRaw = document.getElementById("ne-subjects").value.trim();
+        const subjects = subjectsRaw
+          ? subjectsRaw
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : null;
+        if (!name || !short_name) {
+          toast("Name and short name are required", true);
+          return;
+        }
+        try {
+          const exam = await api("exams", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              short_name,
+              description,
+              subjects,
+              is_active: true,
+            }),
+          });
+          toast(`Created ${exam.short_name}`);
+          document.getElementById("ne-name").value = "";
+          document.getElementById("ne-short").value = "";
+          document.getElementById("ne-desc").value = "";
+          document.getElementById("ne-subjects").value = "";
+          await loadExams();
+          openExam(exam.id);
+        } catch (e) {
+          toast(e.message, true);
+        }
+      };
+
+      async function openExam(examId) {
+        CURRENT_EXAM =
+          EXAMS.find((e) => e.id === examId) ||
+          ((EXAMS = await api("exams")), EXAMS.find((e) => e.id === examId));
+        showPage("exam");
+        document.getElementById("ex-title").textContent = CURRENT_EXAM.name;
+        document.getElementById("ex-sub").innerHTML =
+          `${esc(CURRENT_EXAM.short_name)} &nbsp;·&nbsp; <code class="mono">${examId}</code>`;
+        document.getElementById("ex-status-pill").innerHTML =
+          CURRENT_EXAM.is_active
+            ? `<span class="pill pill-ok">active</span>`
+            : `<span class="pill pill-bad">inactive</span>`;
+        setTab("resources");
+        await Promise.all([
+          loadResources(),
+          loadPapers(),
+          loadBlueprint(),
+          loadCurriculum(),
+        ]);
+      }
+
+      /* ---------------- tabs ---------------- */
+      document
+        .querySelectorAll(".tab")
+        .forEach((el) => (el.onclick = () => setTab(el.dataset.tab)));
+      function setTab(name) {
+        document
+          .querySelectorAll(".tab")
+          .forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+        document
+          .querySelectorAll(".tab-panel")
+          .forEach((p) => p.classList.toggle("active", p.id === "tab-" + name));
+      }
+
+      /* ---------------- resources ---------------- */
+      async function loadResources() {
+        const box = document.getElementById("res-table");
+        box.innerHTML = `<div class="loading">Loading…</div>`;
+        const resources = await api(`exams/${CURRENT_EXAM.id}/resources`);
+        document.getElementById("res-count").textContent = resources.length
+          ? `(${resources.length})`
+          : "";
+        if (!resources.length) {
+          box.innerHTML = `<div class="empty">No resources uploaded yet.</div>`;
+          return;
+        }
+        box.innerHTML = `<table><thead><tr><th>File</th><th>Status</th><th></th></tr></thead><tbody>
+    ${resources
+      .map(
+        (r) => `
+      <tr>
+        <td><div class="fname">${esc(r.filename)}</div><div class="fmeta">${((r.file_size || 0) / 1024 / 1024).toFixed(2)} MB</div></td>
+        <td>${statusPill(r.status)}</td>
+        <td class="actions">
+          <button class="btn btn-ghost btn-sm" data-reprocess="${r.id}">Reprocess</button>
+          <button class="btn btn-danger btn-sm" data-delres="${r.id}">Delete</button>
+        </td>
+      </tr>`,
+      )
+      .join("")}
+  </tbody></table>`;
+        box.querySelectorAll("[data-delres]").forEach(
+          (b) =>
+            (b.onclick = async () => {
+              if (!confirm("Delete this resource?")) return;
+              try {
+                await api(
+                  `exams/${CURRENT_EXAM.id}/resources/${b.dataset.delres}`,
+                  { method: "DELETE" },
+                );
+                toast("Resource deleted");
+                loadResources();
+              } catch (e) {
+                toast(e.message, true);
+              }
+            }),
+        );
+        box.querySelectorAll("[data-reprocess]").forEach(
+          (b) =>
+            (b.onclick = async () => {
+              try {
+                await api(
+                  `exams/${CURRENT_EXAM.id}/resources/${b.dataset.reprocess}/reprocess`,
+                  { method: "POST" },
+                );
+                toast("Reprocessing queued");
+                loadResources();
+              } catch (e) {
+                toast(e.message, true);
+              }
+            }),
+        );
+      }
+
+      document.getElementById("res-upload-btn").onclick = async () => {
+        const input = document.getElementById("res-file");
+        if (!input.files.length) {
+          toast("Choose a file first", true);
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", input.files[0]);
+        const btn = document.getElementById("res-upload-btn");
+        btn.disabled = true;
+        btn.textContent = "Uploading…";
+        try {
+          await api(`exams/${CURRENT_EXAM.id}/resources`, {
+            method: "POST",
+            body: fd,
+          });
+          toast("Uploaded — processing queued");
+          input.value = "";
+          loadResources();
+        } catch (e) {
+          toast(e.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Upload";
+        }
+      };
+
+      /* ---------------- sample papers ---------------- */
+      async function loadPapers() {
+        const box = document.getElementById("paper-table");
+        box.innerHTML = `<div class="loading">Loading…</div>`;
+        const papers = await api(`exams/${CURRENT_EXAM.id}/sample-papers`);
+        document.getElementById("paper-count").textContent = papers.length
+          ? `(${papers.length})`
+          : "";
+        if (!papers.length) {
+          box.innerHTML = `<div class="empty">No sample papers uploaded yet.</div>`;
+          return;
+        }
+        box.innerHTML = `<table><thead><tr><th>File</th><th>Status</th><th></th></tr></thead><tbody>
+    ${papers
+      .map(
+        (p) => `
+      <tr>
+        <td><div class="fname">${esc(p.filename)}</div></td>
+        <td>${statusPill(p.status)}</td>
+        <td class="actions"><button class="btn btn-danger btn-sm" data-delpaper="${p.id}">Delete</button></td>
+      </tr>`,
+      )
+      .join("")}
+  </tbody></table>`;
+        box.querySelectorAll("[data-delpaper]").forEach(
+          (b) =>
+            (b.onclick = async () => {
+              if (!confirm("Delete this sample paper?")) return;
+              try {
+                await api(
+                  `exams/${CURRENT_EXAM.id}/sample-papers/${b.dataset.delpaper}`,
+                  { method: "DELETE" },
+                );
+                toast("Sample paper deleted");
+                loadPapers();
+              } catch (e) {
+                toast(e.message, true);
+              }
+            }),
+        );
+      }
+
+      document.getElementById("paper-upload-btn").onclick = async () => {
+        const input = document.getElementById("paper-file");
+        if (!input.files.length) {
+          toast("Choose a file first", true);
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", input.files[0]);
+        const btn = document.getElementById("paper-upload-btn");
+        btn.disabled = true;
+        btn.textContent = "Uploading…";
+        try {
+          await api(`exams/${CURRENT_EXAM.id}/sample-papers`, {
+            method: "POST",
+            body: fd,
+          });
+          toast("Uploaded — blueprint analysis queued");
+          input.value = "";
+          loadPapers();
+        } catch (e) {
+          toast(e.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Upload";
+        }
+      };
+
+      /* ---------------- blueprint ---------------- */
+      async function loadBlueprint() {
+        const box = document.getElementById("bp-body");
+        box.innerHTML = `<div class="loading">Loading…</div>`;
+        try {
+          const bp = await api(`exams/${CURRENT_EXAM.id}/blueprint`);
+          const d = bp.blueprint_data || {};
+          box.innerHTML =
+            renderBlueprint(d) +
+            `<div class="fmeta" style="margin-top:12px">Version ${esc(bp.version)} · generated ${esc(bp.generated_at || "")}</div>`;
+        } catch (e) {
+          box.innerHTML = `<div class="empty">No blueprint yet — upload sample papers to generate one.</div>`;
+        }
+      }
+
+      function renderBlueprint(d) {
+        let html = "";
+        const scalarRows = [];
+        if (d.question_type)
+          scalarRows.push(["Question type", d.question_type]);
+        if (d.options) scalarRows.push(["Options", d.options]);
+        if (scalarRows.length) {
+          html += scalarRows
+            .map(
+              ([l, v]) =>
+                `<div class="bp-row"><span>${esc(l)}</span><strong>${esc(v)}</strong></div>`,
+            )
+            .join("");
+        }
+        const dists = [
+          "difficulty",
+          "question_styles",
+          "subject_distribution",
+          "chapter_distribution",
+          "topic_distribution",
+          "marking_scheme",
+        ];
+        dists.forEach((key) => {
+          const val = d[key];
+          if (!val) return;
+          html += `<h4 style="font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:16px 0 6px">${key.replace(/_/g, " ")}</h4>`;
+          if (Array.isArray(val)) {
+            html += val
+              .map((v) => `<div class="bp-row"><span>${esc(v)}</span></div>`)
+              .join("");
+          } else if (typeof val === "object") {
+            const entries = Object.entries(val);
+            html += entries
+              .map(([k, v]) => {
+                const pct =
+                  typeof v === "number" && v <= 1 ? Math.round(v * 100) : v;
+                const width =
+                  typeof v === "number"
+                    ? Math.min(100, v <= 1 ? v * 100 : v)
+                    : 0;
+                return `<div class="bp-row"><span>${esc(k)}</span>
+          <span style="display:flex; align-items:center; gap:8px">
+            ${typeof v === "number" ? `<span class="bp-bar"><span style="width:${width}%"></span></span>` : ""}
+            <strong>${typeof v === "number" && v <= 1 ? pct + "%" : esc(v)}</strong>
+          </span></div>`;
+              })
+              .join("");
+          } else {
+            html += `<div class="bp-row"><span>${esc(val)}</span></div>`;
+          }
+        });
+        return (
+          html ||
+          `<pre style="font-size:12px; white-space:pre-wrap">${esc(JSON.stringify(d, null, 2))}</pre>`
+        );
+      }
+
+      document.getElementById("bp-regen").onclick = async () => {
+        const btn = document.getElementById("bp-regen");
+        const box = document.getElementById("bp-body");
+
+        // Baseline: whatever generated_at is currently showing (if any) —
+        // regeneration is "done" once a fetch returns a different one.
+        let before = null;
+        try {
+          before = (await api(`exams/${CURRENT_EXAM.id}/blueprint`)).generated_at;
+        } catch (e) {
+          before = null; // no blueprint yet
+        }
+
+        try {
+          await api(`exams/${CURRENT_EXAM.id}/blueprint/regenerate`, {
+            method: "POST",
+          });
+        } catch (e) {
+          toast(e.message, true);
+          return;
+        }
+
+        btn.disabled = true;
+        const startedAt = Date.now();
+        const maxWaitMs = 120000; // generous ceiling — sample papers can be large
+        let attempt = 0;
+
+        const tick = async () => {
+          const elapsed = Math.round((Date.now() - startedAt) / 1000);
+          btn.textContent = `Regenerating… ${elapsed}s`;
+          box.innerHTML = `<div class="loading">Regenerating blueprint… ${elapsed}s elapsed</div>`;
+
+          let bp = null;
+          try {
+            bp = await api(`exams/${CURRENT_EXAM.id}/blueprint`);
+          } catch (e) {
+            // still 404 (no sample questions yet, or first-ever generation) — keep polling
+          }
+
+          const done = bp && bp.generated_at && bp.generated_at !== before;
+          if (done) {
+            btn.disabled = false;
+            btn.textContent = "Regenerate";
+            await loadBlueprint();
+            toast(`Blueprint regenerated (v${bp.version})`);
+            return;
+          }
+
+          if (Date.now() - startedAt > maxWaitMs) {
+            btn.disabled = false;
+            btn.textContent = "Regenerate";
+            toast(
+              "Still processing after 2 minutes — check back or look at the worker logs",
+              true,
+            );
+            await loadBlueprint();
+            return;
+          }
+
+          attempt += 1;
+          // Poll every 2s for the first 30s, then back off to every 5s.
+          setTimeout(tick, attempt < 15 ? 2000 : 5000);
+        };
+
+        tick();
+      };
+
+      /* ---------------- curriculum ---------------- */
+      async function loadCurriculum() {
+        const box = document.getElementById("curr-body");
+        box.innerHTML = `<div class="loading">Loading…</div>`;
+        try {
+          const c = await api(`exams/${CURRENT_EXAM.id}/curriculum`);
+          if (!c.subjects || !c.subjects.length) {
+            box.innerHTML = `<div class="empty">No curriculum extracted yet — upload and process resources first.</div>`;
+            return;
+          }
+          box.innerHTML =
+            `<div class="tree"><ul>` +
+            c.subjects
+              .map(
+                (s) => `
+      <li><div class="subj">${esc(s.name)}</div>
+        ${
+          s.chapters && s.chapters.length
+            ? `<ul>${s.chapters
+                .map(
+                  (ch) => `
+          <li><div class="chap">${esc(ch.name)}</div>
+            ${ch.topics && ch.topics.length ? `<ul>${ch.topics.map((t) => `<li class="topic">${esc(t.name)}</li>`).join("")}</ul>` : ""}
+          </li>`,
+                )
+                .join("")}</ul>`
+            : ""
+        }
+      </li>`,
+              )
+              .join("") +
+            `</ul></div>`;
+        } catch (e) {
+          box.innerHTML = `<div class="empty">Couldn't load curriculum — ${esc(e.message)}</div>`;
+        }
+      }
+
+      /* ---------------- boot ---------------- */
+      async function boot() {
+        document.getElementById("login-screen").style.display = "none";
+        document.getElementById("app").classList.add("on");
+        try {
+          await loadExams();
+          showPage("dashboard");
+        } catch (e) {
+          logout();
+        }
+      }
+
+      if (TOKEN) {
+        boot();
+      } else {
+        document.getElementById("login-screen").style.display = "flex";
+      }
+    </script>
+  </body>
+</html>

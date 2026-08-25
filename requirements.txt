@@ -1,0 +1,59 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+jinja2==3.1.5
+
+# Settings / validation
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+alembic==1.14.0
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+pgvector==0.3.6
+greenlet==3.1.1
+
+# Vector / embeddings / LLM
+openai==1.59.6
+anthropic==0.42.0
+google-genai==1.74.0
+tiktoken==0.8.0
+numpy==1.26.4
+
+# LangGraph orchestration
+langgraph==0.2.62
+langgraph-checkpoint-postgres==2.0.13
+langchain-core==0.3.28
+
+# Background jobs run as FastAPI BackgroundTasks (see app.services.workers) —
+# no Celery/Redis. apscheduler is still needed: it's what python-telegram-bot's
+# JobQueue uses internally for the in-quiz live-timer ticker (app.bot.handlers).
+apscheduler==3.10.4
+
+# Telegram bot
+python-telegram-bot==21.9
+
+# Document parsing
+pypdf==5.1.0
+python-docx==1.1.2
+
+# Storage
+aiofiles==24.1.0
+boto3==1.35.90
+
+# Auth / security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+
+# Utilities
+python-dotenv==1.0.1
+httpx==0.28.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-cov==6.0.0
