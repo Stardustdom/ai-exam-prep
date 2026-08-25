@@ -1,4 +1,6 @@
 # app/bot/handlers.py
+import asyncio
+from collections import defaultdict
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -12,6 +14,22 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Serializes ALL processing (classification, graph resume/start, exit) per
+# chat — confirmed necessary by direct reproduction: two messages for the
+# SAME chat processed concurrently (e.g. a reply-keyboard tap landing right
+# after a slow LLM-backed classification of the previous message) both read
+# the same starting checkpoint and each write back independently; whichever
+# finishes last silently wins, discarding the other's real result even
+# though ITS OWN response already told the user it succeeded. A single
+# Render instance (WEB_CONCURRENCY=1) still runs requests concurrently via
+# asyncio, so an in-process lock is sufficient here — it would NOT be
+# sufficient across multiple instances, which this deployment doesn't have.
+_chat_locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+def _chat_lock(chat_id) -> asyncio.Lock:
+    return _chat_locks[str(chat_id)]
+
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # /start always means "give me a clean slate", including when the user is
@@ -20,20 +38,22 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # paused (previously: literally tried to resolve "start" as a chapter
     # name / question count / etc., which just produced another confusing
     # error instead of the reset the user was asking for).
-    await _handle_turn(update, context, "start", force_restart=True)
+    async with _chat_lock(update.effective_chat.id):
+        await _handle_turn(update, context, "start", force_restart=True)
 
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    intent = await _classify_message_intent(update.message.text or "", update)
-    if intent == "exit":
-        await _handle_exit(update, context)
-        return
-    if intent == "start":
-        # A greeting ("hi"/"hello"/...) means the same thing /start does —
-        # give a clean slate, mid-conversation or not.
-        await _handle_turn(update, context, "start", force_restart=True)
-        return
-    await _handle_turn(update, context, update.message.text)
+    async with _chat_lock(update.effective_chat.id):
+        intent = await _classify_message_intent(update.message.text or "", update)
+        if intent == "exit":
+            await _handle_exit(update, context)
+            return
+        if intent == "start":
+            # A greeting ("hi"/"hello"/...) means the same thing /start does —
+            # give a clean slate, mid-conversation or not.
+            await _handle_turn(update, context, "start", force_restart=True)
+            return
+        await _handle_turn(update, context, update.message.text)
 
 
 # Steps where free text IS the answer being evaluated (a real curriculum
@@ -131,27 +151,28 @@ async def _handle_exit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer()
+    await query.answer()  # ack immediately, outside the lock — unrelated to our own processing
     data = query.data
 
-    # The results-screen buttons operate on a COMPLETED thread (the graph has
-    # already reached END) — none of the interrupt/resume machinery applies
-    # to them. Previously they had no handler at all, so pressing any of them
-    # fell through to the generic flow, which sees "not awaiting input" and
-    # calls graph.start() fresh — silently generating a whole NEW quiz using
-    # the old leftover exam/chapter/duration instead of doing what the button
-    # actually says.
-    if data == "review_answers":
-        await _handle_review_answers(update, context)
-        return
-    if data == "view_explanations":
-        await _handle_view_explanations(update, context)
-        return
-    if data in ("take_another", "main_menu"):
-        await _handle_turn(update, context, "start", force_restart=True)
-        return
+    async with _chat_lock(update.effective_chat.id):
+        # The results-screen buttons operate on a COMPLETED thread (the graph
+        # has already reached END) — none of the interrupt/resume machinery
+        # applies to them. Previously they had no handler at all, so pressing
+        # any of them fell through to the generic flow, which sees "not
+        # awaiting input" and calls graph.start() fresh — silently generating
+        # a whole NEW quiz using the old leftover exam/chapter/duration
+        # instead of doing what the button actually says.
+        if data == "review_answers":
+            await _handle_review_answers(update, context)
+            return
+        if data == "view_explanations":
+            await _handle_view_explanations(update, context)
+            return
+        if data in ("take_another", "main_menu"):
+            await _handle_turn(update, context, "start", force_restart=True)
+            return
 
-    await _handle_turn(update, context, data, is_callback=True)
+        await _handle_turn(update, context, data, is_callback=True)
 
 
 async def _handle_turn(
