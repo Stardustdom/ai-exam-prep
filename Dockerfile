@@ -29,5 +29,11 @@ RUN mkdir -p /app/storage
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Render (and most PaaS hosts) assign their own port at runtime via $PORT and
+# route traffic to whatever the container actually listens on — a hardcoded
+# --port 8000 would build fine but fail every health check once deployed
+# there. Falls back to 8000 for docker-compose/local dev, where nothing sets
+# $PORT. Shell form (not exec-form CMD ["..."]) is required for $PORT to
+# actually expand — exec form passes it through literally, unexpanded.
+EXPOSE 8000
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
