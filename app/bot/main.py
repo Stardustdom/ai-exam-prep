@@ -29,7 +29,7 @@ def init_bot() -> Application:
     return application
 
 
-@bot_app.post("/webhook/telegram")
+@bot_app.post("/telegram")
 async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: str = Header(default=None)):
     """Handle Telegram webhook requests"""
     if x_telegram_bot_api_secret_token != _webhook_secret:

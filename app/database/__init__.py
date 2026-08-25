@@ -36,7 +36,18 @@ engine = create_async_engine(
     echo=settings.debug,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
-    connect_args=_connect_args
+    connect_args=_connect_args,
+    # Managed Postgres (Neon included, on the free tier) closes idle
+    # connections server-side, which the pool doesn't otherwise notice —
+    # confirmed live: "connection is closed" InterfaceError on the first
+    # request after a quiet spell (seen on /internal/sweep-expired-quizzes
+    # after Render + Neon had both gone idle), succeeding on retry once a
+    # fresh connection replaced the stale one. pool_pre_ping issues a
+    # cheap liveness check before handing out a pooled connection and
+    # transparently reconnects if it's dead, instead of leaving every
+    # first-request-after-idle to fail (a real webhook message, not just
+    # the sweep, would hit this exact error otherwise).
+    pool_pre_ping=True
 )
 
 # Create async session factory
