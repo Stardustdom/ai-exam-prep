@@ -1,5 +1,5 @@
 from typing import Optional, Union
-from telegram import Bot, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import Bot, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.constants import ParseMode
 from app.config.settings import settings
 import logging
@@ -14,7 +14,7 @@ class TelegramService:
         self,
         chat_id: int,
         text: str,
-        reply_markup: Optional[Union[InlineKeyboardMarkup, ReplyKeyboardMarkup]] = None,
+        reply_markup: Optional[Union[InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove]] = None,
         parse_mode: Optional[str] = ParseMode.HTML
     ):
         """Send a message to a Telegram chat"""

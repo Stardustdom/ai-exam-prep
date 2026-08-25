@@ -1,7 +1,7 @@
 # app/bot/handlers.py
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from sqlalchemy import text
 from app.database import AsyncSessionLocal
@@ -71,7 +71,8 @@ async def _handle_exit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _purge_thread_checkpoint(ctx.db, thread_id)
 
         await ctx.telegram_service.send_message(
-            chat_id=chat_id, text="👋 Session ended. Send /start anytime to begin a new one."
+            chat_id=chat_id, text="👋 Session ended. Send /start anytime to begin a new one.",
+            reply_markup=ReplyKeyboardRemove()
         )
 
 
@@ -274,7 +275,14 @@ async def _render_prompt(
         )
 
     elif step == SessionStep.SELECT_QUESTION_COUNT.value:
-        await ctx.telegram_service.send_message(chat_id=chat_id, text=prompt["message"])
+        # Explicitly clear the exam-selection reply keyboard now that it's
+        # served its purpose — one_time_keyboard alone doesn't reliably hide
+        # it (it never auto-showed on desktop/web in the first place, so
+        # there's nothing there for that flag to hide; it would otherwise
+        # just sit behind the keyboard icon indefinitely).
+        await ctx.telegram_service.send_message(
+            chat_id=chat_id, text=prompt["message"], reply_markup=ReplyKeyboardRemove()
+        )
 
     elif step == SessionStep.SELECT_CHAPTER.value:
         options = prompt.get("options") or []
@@ -285,7 +293,10 @@ async def _render_prompt(
         )
 
     elif step == SessionStep.SELECT_DURATION.value:
-        await ctx.telegram_service.send_message(chat_id=chat_id, text=prompt["message"])
+        # Clear the chapter-selection keyboard — see SELECT_QUESTION_COUNT above.
+        await ctx.telegram_service.send_message(
+            chat_id=chat_id, text=prompt["message"], reply_markup=ReplyKeyboardRemove()
+        )
 
     elif step == SessionStep.QUIZ_READY.value:
         await ctx.telegram_service.send_message(
