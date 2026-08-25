@@ -218,7 +218,13 @@ class ExamGraph:
             state.exam_id, state.exam_name = exam_id, exam_name
             state.exam_confidence, state.exam_matched_method = confidence, method
         else:
-            state.error = "I couldn't confidently identify the exam. Please select one from the menu."
+            # Only checked after matching has already failed — never gates
+            # whether matching is attempted, so it can't override a real
+            # (if unsuccessful) exam-name attempt like a typo.
+            if isinstance(user_input, str) and await self.exam_resolver.is_off_topic_message(user_input):
+                state.error = "I'm a dedicated exam-prep bot, not built for general chat — please pick your exam from the menu below."
+            else:
+                state.error = "I couldn't confidently identify the exam. Please select one from the menu."
         return state
 
     def _route_resolve_exam(self, state: ExamSessionState) -> str:
@@ -301,8 +307,14 @@ class ExamGraph:
         elif chapter_id and confidence >= settings.chapter_match_confidence_threshold:
             state.chapter_id, state.chapter_name = chapter_id, chapter_name
         else:
-            state.error = "Couldn't find that chapter."
-            state.context["chapter_search_query"] = user_input if isinstance(user_input, str) else None
+            # Only checked after matching has already failed — see the
+            # matching comment in _resolve_exam_node above.
+            if isinstance(user_input, str) and await self.curriculum_resolver.is_off_topic_message(user_input):
+                state.error = "I'm a dedicated exam-prep bot, not built for general chat — please pick a chapter/topic from the menu below."
+                state.context["chapter_search_query"] = None
+            else:
+                state.error = "Couldn't find that chapter."
+                state.context["chapter_search_query"] = user_input if isinstance(user_input, str) else None
         return state
 
     def _route_resolve_chapter(self, state: ExamSessionState) -> str:

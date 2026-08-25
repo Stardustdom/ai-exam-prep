@@ -63,8 +63,8 @@ def build_context(db: AsyncSession) -> BotContext:
     from app.services.retrieval import RetrievalService
 
     session_manager = SessionManagerAgent(user_repo, chat_session_repo, telegram_service)
-    exam_resolver = ExamResolverAgent(exam_repo, cache_repo, embedding_service, cache_service)
-    curriculum_resolver = CurriculumResolverAgent(chapter_repo, topic_repo, embedding_service, cache_service)
+    exam_resolver = ExamResolverAgent(exam_repo, cache_repo, embedding_service, cache_service, llm_service)
+    curriculum_resolver = CurriculumResolverAgent(chapter_repo, topic_repo, embedding_service, cache_service, llm_service)
     retrieval_agent = RetrievalAgent(chunk_repo, vector_store, embedding_service)
     question_generator = QuestionGeneratorAgent(llm_service, embedding_service, quiz_repo)
     quiz_manager = QuizManagerAgent(quiz_repo, telegram_service)

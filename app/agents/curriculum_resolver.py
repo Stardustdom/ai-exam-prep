@@ -6,6 +6,8 @@ import asyncio
 from app.database.repositories import ChapterRepository, TopicRepository
 from app.services.embeddings import EmbeddingService
 from app.services.semantic_cache import SemanticCacheService
+from app.services.llm import LLMService
+from app.agents.intent_classifier import is_off_topic
 from app.config.settings import settings
 import logging
 
@@ -40,12 +42,20 @@ class CurriculumResolverAgent:
         chapter_repo: ChapterRepository,
         topic_repo: TopicRepository,
         embedding_service: EmbeddingService,
-        semantic_cache_service: SemanticCacheService
+        semantic_cache_service: SemanticCacheService,
+        llm_service: LLMService
     ):
         self.chapter_repo = chapter_repo
         self.topic_repo = topic_repo
         self.embedding_service = embedding_service
         self.semantic_cache_service = semantic_cache_service
+        self.llm_service = llm_service
+
+    async def is_off_topic_message(self, text: str) -> bool:
+        """Call only after resolve_chapter() has already failed to match —
+        see app.agents.intent_classifier.is_off_topic for why this can
+        never override a real (if unsuccessful) chapter-name attempt."""
+        return await is_off_topic(text, self.llm_service, self.semantic_cache_service)
 
     async def get_options(self, exam_id: str) -> List[Dict[str, Any]]:
         """All chapters and topics available for an exam, for menu display and fallback listing"""

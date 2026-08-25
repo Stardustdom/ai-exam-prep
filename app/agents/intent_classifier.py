@@ -109,3 +109,61 @@ async def classify_intent(
         confidence=1.0, ttl_hours=24 * 30
     )
     return intent
+
+
+_OFF_TOPIC_ROLE_PROMPT = """You are helping an exam-prep Telegram bot give a \
+better error message. The user's message FAILED to match any real exam or \
+chapter/topic name via exact and semantic matching - your only job is to \
+judge whether it's clearly unrelated small talk / a question about the bot \
+itself (so the bot should say "I'm just a study bot" instead of "try \
+again"), or whether it still looks like a genuine (if unsuccessful) attempt \
+to name an exam or chapter (a typo, an unusual phrasing, a real subject the \
+corpus just doesn't have).
+
+Respond with EXACTLY one word: YES (clearly off-topic/small-talk) or NO \
+(still looks like a genuine attempt). If there is ANY doubt, respond NO.
+
+Examples:
+"whats your name" -> YES
+"who made you" -> YES
+"how are you" -> YES
+"lol" -> YES
+"phyiscs" -> NO
+"organic chem" -> NO
+"idk maybe calculus" -> NO
+"quantum mechanics" -> NO"""
+
+
+async def is_off_topic(
+    text: str, llm_service: LLMService, cache_service: SemanticCacheService
+) -> bool:
+    """Only meaningful to call from a resolution FAILURE path (exam/chapter
+    matching has already tried and failed) — never gates whether matching is
+    attempted in the first place, so it can't collide with or override a
+    real selection. Same cost/safety layering as classify_intent: cached
+    after the first classification of any given phrase, and defaults to
+    False (i.e. "still treat it as a genuine attempt") on any doubt, cache
+    miss requiring an LLM call, or classification failure — the safe
+    default keeps today's existing "couldn't find that, try again" message
+    rather than risk telling a real (if unsuccessful) attempt "I'm just a
+    study bot"."""
+    normalized = text.strip().lower()
+    if not normalized or len(normalized.split()) > 8:
+        return False
+
+    cached = await cache_service.get_resolved_entity(query=normalized, entity_type="off_topic_check")
+    if cached:
+        return cached.get("entity_id") == "yes"
+
+    result = False
+    try:
+        response = await llm_service.generate_text(f"{_OFF_TOPIC_ROLE_PROMPT}\n\nMessage: \"{text}\"", temperature=0.0)
+        result = response.strip().upper() == "YES"
+    except Exception as e:
+        logger.warning(f"Off-topic classification failed, defaulting to False: {e}")
+
+    await cache_service.cache_resolved_entity(
+        query=normalized, entity_type="off_topic_check", entity_id=("yes" if result else "no"),
+        confidence=1.0, ttl_hours=24 * 30
+    )
+    return result

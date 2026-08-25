@@ -9,12 +9,12 @@ from app.agents.curriculum_resolver import CurriculumResolverAgent, _OVERALL_ALI
 
 @pytest.fixture
 def exam_resolver():
-    return ExamResolverAgent(exam_repo=None, semantic_cache_repo=None, embedding_service=None, semantic_cache_service=None)
+    return ExamResolverAgent(exam_repo=None, semantic_cache_repo=None, embedding_service=None, semantic_cache_service=None, llm_service=None)
 
 
 @pytest.fixture
 def curriculum_resolver():
-    return CurriculumResolverAgent(chapter_repo=None, topic_repo=None, embedding_service=None, semantic_cache_service=None)
+    return CurriculumResolverAgent(chapter_repo=None, topic_repo=None, embedding_service=None, semantic_cache_service=None, llm_service=None)
 
 
 def test_exam_normalize_lowercases_and_strips_stopwords(exam_resolver):
