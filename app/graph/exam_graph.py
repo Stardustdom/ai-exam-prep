@@ -203,7 +203,7 @@ class ExamGraph:
             "message": state.error or "Hello, let's study. Select exam from the main menu",
             "show_menu": True
         })
-        state.error = None
+        state.error = ""  # NOT None — see ExamSessionState.error's docstring for why
 
         direct_id = _strip_prefix(user_input, "exam_")
         if direct_id:
@@ -237,7 +237,7 @@ class ExamGraph:
             "step": SessionStep.SELECT_QUESTION_COUNT.value,
             "message": state.error or "Choose number of questions to be generated"
         })
-        state.error = None
+        state.error = ""  # NOT None — see ExamSessionState.error's docstring for why
         try:
             count = int(str(user_input).strip())
         except (ValueError, AttributeError):
@@ -258,8 +258,10 @@ class ExamGraph:
     # ---- nodes: chapter/topic -----------------------------------------------
 
     async def _resolve_chapter_node(self, state: ExamSessionState) -> ExamSessionState:
-        # Coming back here from generate_quiz's "retry" edge after a generation failure
-        state.chapter_id, state.chapter_name = None, None if not state.error else state.chapter_name
+        # Coming back here from generate_quiz's "retry" edge after a generation failure.
+        # "" not None — see ExamSessionState.error's docstring; the same
+        # checkpoint-channel behavior applies to every field, not just error.
+        state.chapter_id, state.chapter_name = "", "" if not state.error else state.chapter_name
 
         options = await self.curriculum_resolver.get_options(state.exam_id)
         # A full curriculum can run into the hundreds of chapters/topics (this
@@ -285,7 +287,7 @@ class ExamGraph:
             "message": message,
             "options": display_options
         })
-        state.error = None
+        state.error = ""  # NOT None — see ExamSessionState.error's docstring for why
 
         direct_id = _strip_prefix(user_input, "chapter_")
         if direct_id == "overall":
@@ -346,7 +348,7 @@ class ExamGraph:
             "step": SessionStep.SELECT_DURATION.value,
             "message": state.error or "Enter duration of test (in mins)."
         })
-        state.error = None
+        state.error = ""  # NOT None — see ExamSessionState.error's docstring for why
         try:
             duration = int(str(user_input).strip())
         except (ValueError, AttributeError):
@@ -397,14 +399,14 @@ class ExamGraph:
 
             state.quiz_id = quiz_id
             state.status = "quiz_ready"
-            state.error = None
+            state.error = ""  # NOT None — see ExamSessionState.error's docstring for why
             state = await self.session_manager.transition_step(state, SessionStep.QUIZ_READY)
             return state
 
         except Exception as e:
             logger.error(f"Quiz generation failed: {e}")
             state.error = "Sorry, I couldn't generate the test right now. Please choose a chapter/topic to try again."
-            state.chapter_id, state.chapter_name = None, None
+            state.chapter_id, state.chapter_name = "", ""  # "" not None — see ExamSessionState.error's docstring
             return state
 
     def _route_generate_quiz(self, state: ExamSessionState) -> str:
@@ -472,7 +474,7 @@ class ExamGraph:
             "step": SessionStep.QUIZ_READY.value,
             "message": state.error or "Your test is ready."
         })
-        state.error = None
+        state.error = ""  # NOT None — see ExamSessionState.error's docstring for why
         if user_input == "start_quiz":
             await self.quiz_manager.start_quiz(state.quiz_id)
             state.start_time = datetime.utcnow()

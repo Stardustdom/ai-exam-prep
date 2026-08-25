@@ -63,7 +63,18 @@ class ExamSessionState(BaseModel):
     # Results
     score: Optional[float] = None
     evaluation: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    # "" (never None) means "no error". LangGraph checkpoints each Pydantic
+    # field as an independent channel, and — confirmed by direct
+    # reproduction against this project's real checkpointer/Postgres setup —
+    # a node returning None for a field that previously held a real value
+    # does NOT propagate as a clear; the old value silently survives into
+    # the NEXT node's view of state. Every node that sets state.error = ""
+    # (never None) after consuming it, and every read uses `or` against a
+    # falsy value, so "" behaves identically to None everywhere it's
+    # checked — the only thing that changes is that clearing an old error
+    # actually sticks. Getting this wrong is exactly what caused a stale
+    # error from a retried step to render as the *next* step's prompt.
+    error: str = ""
     retry_count: int = 0
     
     # Context data (for debugging/observability)

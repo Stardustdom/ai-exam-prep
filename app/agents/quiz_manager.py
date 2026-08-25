@@ -33,7 +33,9 @@ class QuizManagerAgent:
         try:
             # "overall" is the UI sentinel for "no specific chapter" (see ExamGraph)
             # and must never be written to the chapter_id UUID foreign key.
-            real_chapter_id = None if state.chapter_id in (None, "overall") else uuid.UUID(state.chapter_id)
+            # ExamSessionState uses "" (not None) as its "unset" value — see
+            # ExamSessionState.error's docstring — so both are checked here.
+            real_chapter_id = None if state.chapter_id in (None, "", "overall") else uuid.UUID(state.chapter_id)
             real_topic_id = uuid.UUID(state.topic_id) if state.topic_id else None
 
             quiz_data = {
