@@ -172,6 +172,16 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await _handle_turn(update, context, "start", force_restart=True)
             return
 
+        # Group-onboarding "Set exam" flow (Gen-Z SRS FR-1.2) — a group-level
+        # setting, not part of the per-user interrupt/resume graph at all,
+        # so it's handled entirely here rather than routed into _handle_turn.
+        if data == "group_set_exam":
+            await _handle_group_set_exam_menu(update, context)
+            return
+        if data.startswith("group_exam_"):
+            await _handle_group_exam_selected(update, context, data[len("group_exam_"):])
+            return
+
         await _handle_turn(update, context, data, is_callback=True)
 
 
@@ -681,3 +691,92 @@ async def _tick_quiz_timer(context: ContextTypes.DEFAULT_TYPE) -> None:
                 # user's next interaction) handles the actual submit; the
                 # ticker's only job was the visible countdown, so stop here.
                 context.job.schedule_removal()
+
+
+# ---- group auto-onboarding (Gen-Z SRS FR-1) ----------------------------------
+
+async def my_chat_member_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Fires when the bot's OWN membership status in a chat changes (added,
+    removed, promoted...) — distinct from CHAT_MEMBER, which is about other
+    members. No /start, no command from any member: the bot starts posting
+    as soon as it has send-message permission (FR-1.1), which is exactly
+    what this event tells us happened. Only groups/supergroups are in
+    scope — a status change in a private chat or channel is a no-op here."""
+    chat = update.effective_chat
+    if chat.type not in ("group", "supergroup"):
+        return
+
+    my_member = update.my_chat_member
+    if my_member is None:
+        return
+
+    new_status = my_member.new_chat_member.status
+    old_status = my_member.old_chat_member.status
+    group_id = str(chat.id)
+
+    async with AsyncSessionLocal() as db:
+        ctx = build_context(db)
+
+        if new_status in ("member", "administrator"):
+            was_absent = old_status in ("left", "kicked")
+            await ctx.group_repo.get_or_create(group_id)
+            if was_absent:
+                # FR-1.3: resume the existing row silently on re-add — the
+                # welcome card is only for a genuinely new (or newly
+                # resumed) subscription, not every incidental status event
+                # (e.g. the bot being promoted to admin while already a
+                # member, which also fires MY_CHAT_MEMBER).
+                await _send_group_welcome_card(ctx, chat.id)
+        elif new_status in ("left", "kicked"):
+            await ctx.group_repo.deactivate(group_id)
+
+
+async def _send_group_welcome_card(ctx, chat_id: int) -> None:
+    """FR-1.2: one-time welcome message — what the bot does, the default
+    schedule, and an optional one-tap "set exam" button. Skippable: a group
+    that never taps it gets the mixed-subject default pool."""
+    text = (
+        "👋 Hey! I'm your exam-prep study buddy.\n\n"
+        "I'll post daily revision notes, quick pop quizzes, and a Daily 10 "
+        "set right here in the group — no setup needed, anyone can just "
+        "tap to answer.\n\n"
+        "Default: twice a day, mixed-subject until an exam is set for this group.\n\n"
+        "Want to focus this group on a specific exam? Tap below (optional — "
+        "skip it and I'll use the default)."
+    )
+    await ctx.telegram_service.send_message(
+        chat_id=chat_id, text=text,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🎯 Set exam", callback_data="group_set_exam")]])
+    )
+
+
+async def _handle_group_set_exam_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    async with AsyncSessionLocal() as db:
+        ctx = build_context(db)
+        exams = await ctx.exam_resolver.get_all_active_exams()
+        if not exams:
+            await ctx.telegram_service.send_message(
+                chat_id=chat_id,
+                text="No exams have been configured on the admin side yet — sticking with the default mixed-subject pool for now."
+            )
+            return
+        buttons = [[InlineKeyboardButton(e["name"], callback_data=f"group_exam_{e['id']}")] for e in exams]
+        await ctx.telegram_service.send_message(
+            chat_id=chat_id, text="Which exam should this group focus on?",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+
+async def _handle_group_exam_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, exam_id: str) -> None:
+    chat_id = update.effective_chat.id
+    async with AsyncSessionLocal() as db:
+        ctx = build_context(db)
+        exam = await ctx.exam_repo.get_by_id(exam_id)
+        if not exam or not exam.is_active:
+            await ctx.telegram_service.send_message(chat_id=chat_id, text="That exam isn't available anymore — please pick another.")
+            return
+        await ctx.group_repo.set_exam(str(chat_id), exam_id)
+        await ctx.telegram_service.send_message(
+            chat_id=chat_id, text=f"✅ This group is now focused on {exam.name}. Daily content will be drawn from it."
+        )

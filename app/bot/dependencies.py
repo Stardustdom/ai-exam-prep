@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.repositories import (
     ExamRepository, SemanticCacheRepository, ChapterRepository, TopicRepository,
     DocumentChunkRepository, QuizRepository, UserRepository, ChatSessionRepository,
-    BlueprintRepository
+    BlueprintRepository, GroupSubscriptionRepository
 )
 from app.services.embeddings import EmbeddingService
 from app.services.llm import LLMService
@@ -36,6 +36,7 @@ class BotContext:
     user_repo: UserRepository
     chat_session_repo: ChatSessionRepository
     quiz_repo: QuizRepository
+    group_repo: GroupSubscriptionRepository
     telegram_service: TelegramService
     session_manager: SessionManagerAgent
     exam_resolver: ExamResolverAgent
@@ -53,6 +54,7 @@ def build_context(db: AsyncSession) -> BotContext:
     quiz_repo = QuizRepository(db)
     cache_repo = SemanticCacheRepository(db)
     blueprint_repo = BlueprintRepository(db)
+    group_repo = GroupSubscriptionRepository(db)
 
     embedding_service = EmbeddingService()
     llm_service = LLMService()
@@ -86,6 +88,7 @@ def build_context(db: AsyncSession) -> BotContext:
     return BotContext(
         db=db, exam_repo=exam_repo, chapter_repo=chapter_repo, topic_repo=topic_repo,
         user_repo=user_repo, chat_session_repo=chat_session_repo, quiz_repo=quiz_repo,
+        group_repo=group_repo,
         telegram_service=telegram_service,
         session_manager=session_manager, exam_resolver=exam_resolver,
         curriculum_resolver=curriculum_resolver, graph=graph

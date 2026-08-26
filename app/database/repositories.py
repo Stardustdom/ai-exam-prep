@@ -8,7 +8,7 @@ from app.database.models import (
     Exam, ExamAlias, Resource, Document, DocumentChunk,
     Subject, Chapter, Topic, SamplePaper, SampleQuestion,
     ExamBlueprint, User, ChatSession, Quiz, SemanticCache,
-    ProcessingStatus
+    ProcessingStatus, GroupSubscription
 )
 
 class BaseRepository:
@@ -514,3 +514,55 @@ class SemanticCacheRepository(BaseRepository):
         for row in result.scalars().all():
             await self.session.delete(row)
         await self.session.commit()
+
+
+class GroupSubscriptionRepository(BaseRepository):
+    async def get_by_telegram_group_id(self, telegram_group_id: str) -> Optional[GroupSubscription]:
+        result = await self.session.execute(
+            select(GroupSubscription).where(GroupSubscription.telegram_group_id == str(telegram_group_id))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_or_create(self, telegram_group_id: str, **defaults) -> GroupSubscription:
+        """FR-1.3: if the bot is removed and re-added, resume the existing
+        row (re-activating it) rather than re-onboarding from scratch."""
+        existing = await self.get_by_telegram_group_id(telegram_group_id)
+        if existing:
+            if not existing.is_active:
+                existing.is_active = True
+                await self.session.commit()
+                await self.session.refresh(existing)
+            return existing
+
+        group = GroupSubscription(
+            telegram_group_id=str(telegram_group_id),
+            send_times=defaults.get("send_times", ["09:00", "18:00"]),
+            content_types_enabled=defaults.get("content_types_enabled", ["notes", "daily10", "popquiz", "flashcards"]),
+            rate_limit_per_day=defaults.get("rate_limit_per_day", 2),
+        )
+        self.session.add(group)
+        await self.session.commit()
+        await self.session.refresh(group)
+        return group
+
+    async def deactivate(self, telegram_group_id: str) -> None:
+        """Bot removed from the group — stop posting, but keep the row (and
+        its history) so FR-1.3's resume-not-reonboard works if re-added."""
+        group = await self.get_by_telegram_group_id(telegram_group_id)
+        if group:
+            group.is_active = False
+            await self.session.commit()
+
+    async def get_active(self) -> List[GroupSubscription]:
+        result = await self.session.execute(
+            select(GroupSubscription).where(GroupSubscription.is_active == True)
+        )
+        return result.scalars().all()
+
+    async def set_exam(self, telegram_group_id: str, exam_id: str) -> Optional[GroupSubscription]:
+        group = await self.get_by_telegram_group_id(telegram_group_id)
+        if group:
+            group.exam_id = uuid.UUID(str(exam_id))
+            await self.session.commit()
+            await self.session.refresh(group)
+        return group

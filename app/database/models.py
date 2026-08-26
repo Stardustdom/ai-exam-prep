@@ -382,6 +382,41 @@ class Quiz(Base):
     )
 
 
+class GroupSubscription(Base):
+    """A Telegram group/supergroup the bot has been added to, with
+    send-message permission — the primary delivery target for the group
+    engagement layer (Gen-Z SRS §6): content is posted once to the group's
+    telegram_group_id, never per-member. Configuring exam_id/subjects is
+    optional (FR-1.2) — a null exam_id means "mixed-subject pool" until an
+    admin picks one via the welcome card's "Set exam" button."""
+    __tablename__ = "group_subscriptions"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    telegram_group_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    exam_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="SET NULL"), nullable=True)
+    subjects_enabled: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String))
+    # Local-time-of-day strings ("09:00", "18:00"), interpreted in `timezone`
+    # below — the daily-push endpoint (FR-2/FR-3, not built yet) matches
+    # these against each tick to decide which groups are due.
+    send_times: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
+    timezone: Mapped[str] = mapped_column(String(50), default="Asia/Kolkata")
+    # notes / daily10 / popquiz / flashcards — which content types this
+    # group has enabled (FR-9.3's /group-settings toggles these).
+    content_types_enabled: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
+    rate_limit_per_day: Mapped[int] = mapped_column(Integer, default=2)  # capped 1-3 per §5.2
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    added_via_referral_group_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    exam = relationship("Exam")
+
+    __table_args__ = (
+        Index("idx_group_subscriptions_telegram_group_id", "telegram_group_id"),
+        Index("idx_group_subscriptions_is_active", "is_active"),
+    )
+
+
 class SemanticCache(Base):
     __tablename__ = "semantic_cache"
     

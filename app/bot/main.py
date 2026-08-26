@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Response, Header, HTTPException
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ChatMemberHandler, filters
 from app.config.settings import settings
 from app.bot import handlers
 import logging
@@ -26,6 +26,12 @@ def init_bot() -> Application:
     application.add_handler(CommandHandler("start", handlers.start_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.message_handler))
     application.add_handler(CallbackQueryHandler(handlers.callback_handler))
+    # Group auto-onboarding (Gen-Z SRS FR-1): fires when the bot's OWN status
+    # in a chat changes (added/removed/promoted) — distinct from
+    # CHAT_MEMBER, which is about other members and requires separately
+    # opting in via allowed_updates. MY_CHAT_MEMBER is in Telegram's default
+    # allowed_updates set already, so no webhook/polling config change needed.
+    application.add_handler(ChatMemberHandler(handlers.my_chat_member_handler, ChatMemberHandler.MY_CHAT_MEMBER))
     return application
 
 
