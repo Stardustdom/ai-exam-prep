@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: ai-exam-prep
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: "AI Exam Preparation Platform"
+      - key: APP_ENV
+        value: "production"
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_POOL_SIZE
+        value: "10"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "20"
+      - key: VECTOR_DIMENSION
+        value: "1536"
+      - key: STORAGE_TYPE
+        value: "local"
+      - key: STORAGE_PATH
+        value: "/app/storage"
+      - key: LLM_PROVIDER
+        value: "gemini"
+      - key: EMBEDDING_PROVIDER
+        value: "gemini"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-2.5-flash"
+      - key: GEMINI_EMBEDDING_MODEL
+        value: "gemini-embedding-001"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_URL
+        sync: false
+      - key: ADMIN_USERNAME
+        value: "admin"
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SWEEP_SECRET
+        generateValue: true
+      - key: LANGGRAPH_CHECKPOINT_STORE
+        value: "postgres"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: LOG_JSON_FORMAT
+        value: "true"

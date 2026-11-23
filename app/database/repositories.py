@@ -8,8 +8,9 @@ from app.database.models import (
     Exam, ExamAlias, Resource, Document, DocumentChunk,
     Subject, Chapter, Topic, SamplePaper, SampleQuestion,
     ExamBlueprint, User, ChatSession, Quiz, SemanticCache,
-    ProcessingStatus, GroupSubscription
+    ProcessingStatus, GroupSubscription, PopQuiz, PopQuizAnswer
 )
+from sqlalchemy.exc import IntegrityError
 
 class BaseRepository:
     model = None
@@ -566,3 +567,56 @@ class GroupSubscriptionRepository(BaseRepository):
             await self.session.commit()
             await self.session.refresh(group)
         return group
+
+class PopQuizRepository(BaseRepository):
+    async def create(self, data: Dict[str, Any]) -> PopQuiz:
+        quiz = PopQuiz(**data)
+        self.session.add(quiz)
+        await self.session.commit()
+        await self.session.refresh(quiz)
+        return quiz
+
+    async def get_by_id(self, pop_quiz_id: str) -> Optional[PopQuiz]:
+        result = await self.session.execute(
+            select(PopQuiz).where(PopQuiz.id == uuid.UUID(str(pop_quiz_id)))
+        )
+        return result.scalar_one_or_none()
+
+    async def set_message_id(self, pop_quiz_id: str, telegram_message_id: str) -> None:
+        quiz = await self.get_by_id(pop_quiz_id)
+        if quiz:
+            quiz.telegram_message_id = str(telegram_message_id)
+            await self.session.commit()
+
+    async def record_answer(
+        self, pop_quiz_id: str, telegram_user_id: str, answer: str, is_correct: bool
+    ) -> Optional[PopQuizAnswer]:
+        """Returns the new PopQuizAnswer row, or None if this student already
+        answered (FR-4.3) — enforced by the DB's own unique constraint, not
+        a check-then-insert in application code, so it's race-safe even if
+        the same student's tap somehow gets processed twice concurrently."""
+        record = PopQuizAnswer(
+            pop_quiz_id=uuid.UUID(str(pop_quiz_id)),
+            telegram_user_id=str(telegram_user_id),
+            answer=answer,
+            is_correct=is_correct,
+        )
+        self.session.add(record)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            return None
+        await self.session.refresh(record)
+        return record
+
+    async def has_answered(self, pop_quiz_id: str, telegram_user_id: str) -> bool:
+        result = await self.session.execute(
+            select(PopQuizAnswer).where(
+                and_(
+                    PopQuizAnswer.pop_quiz_id == uuid.UUID(str(pop_quiz_id)),
+                    PopQuizAnswer.telegram_user_id == str(telegram_user_id)
+                )
+            )
+        )
+        return result.scalar_one_or_none() is not None

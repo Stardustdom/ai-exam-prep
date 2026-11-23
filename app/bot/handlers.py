@@ -1,5 +1,7 @@
 # app/bot/handlers.py
 import asyncio
+import uuid
+import random
 from collections import defaultdict
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
@@ -151,8 +153,22 @@ async def _handle_exit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer()  # ack immediately, outside the lock — unrelated to our own processing
     data = query.data
+
+    # Pop-quiz answers (Gen-Z SRS FR-4) answer the callback THEMSELVES, with
+    # real feedback text as a private ephemeral alert — answerCallbackQuery
+    # can only be called once per callback_query, so this must run BEFORE
+    # the generic bare .answer() below, not alongside it. Also deliberately
+    # outside the per-chat lock: a pop quiz has no shared per-chat state to
+    # race on (grading is per-student, enforced by a DB unique constraint,
+    # not by anything this lock protects), and multiple group members must
+    # be able to answer the SAME pop quiz concurrently without queuing
+    # behind each other.
+    if data.startswith("pq_"):
+        await _handle_pop_quiz_answer(update, context, data)
+        return
+
+    await query.answer()  # ack immediately, outside the lock — unrelated to our own processing
 
     async with _chat_lock(update.effective_chat.id):
         # The results-screen buttons operate on a COMPLETED thread (the graph
@@ -780,3 +796,146 @@ async def _handle_group_exam_selected(update: Update, context: ContextTypes.DEFA
         await ctx.telegram_service.send_message(
             chat_id=chat_id, text=f"✅ This group is now focused on {exam.name}. Daily content will be drawn from it."
         )
+
+
+# ---- pop quiz (Gen-Z SRS FR-4) ------------------------------------------------
+
+async def popquiz_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manual trigger for testing FR-4 ahead of the scheduled daily-push
+    endpoint (FR-2/FR-3's cron-driven posting isn't built yet). Any member
+    can trigger — matches the "zero setup, anyone can just tap" spirit;
+    FR-9.3's /group-settings could later restrict this to admins if
+    unrestricted triggering turns out to be spammy in practice."""
+    chat = update.effective_chat
+    if chat.type not in ("group", "supergroup"):
+        await update.message.reply_text("This posts a pop quiz to a group — add me to a study group and try it there!")
+        return
+
+    async with AsyncSessionLocal() as db:
+        ctx = build_context(db)
+        group = await ctx.group_repo.get_by_telegram_group_id(str(chat.id))
+        if not group or not group.exam_id:
+            await ctx.telegram_service.send_message(
+                chat_id=chat.id,
+                text="No exam set for this group yet — tap 🎯 Set exam on my welcome message first (or re-add me to see it again)."
+            )
+            return
+
+        ok = await _generate_and_post_pop_quiz(ctx, chat.id, str(group.exam_id))
+        if not ok:
+            await ctx.telegram_service.send_message(
+                chat_id=chat.id, text="Couldn't generate a pop quiz right now — try again in a moment."
+            )
+
+
+async def _generate_and_post_pop_quiz(ctx, chat_id: int, exam_id: str) -> bool:
+    """FR-4.1: one stateless MCQ, posted with inline A/B/C/D buttons — no
+    LangGraph session, no ChatSession/Quiz row. Picks a random chapter
+    (mirrors FR-2.3's "cold-start default: randomized rotation across the
+    syllabus") and reuses the exact same per-chapter retrieval +
+    QuestionGeneratorAgent path "overall" mode quizzes use."""
+    options = await ctx.curriculum_resolver.get_options(exam_id)
+    chapters = [o for o in options if o.get("type") == "chapter"] or options
+    if not chapters:
+        return False
+    chapter = random.choice(chapters)
+
+    chunks = await ctx.retrieval_agent.retrieve_for_question_generation(
+        exam_id=exam_id, chapter_id="", query=chapter["name"], num_chunks=15
+    )
+    if not chunks:
+        logger.warning(f"Pop quiz: no chunks retrieved for chapter '{chapter['name']}', exam {exam_id}")
+        return False
+
+    blueprint_row = await ctx.blueprint_repo.get_active_by_exam(exam_id)
+    blueprint = blueprint_row.blueprint_data if blueprint_row else {}
+
+    questions = await ctx.question_generator.generate_questions(
+        exam_id=exam_id, blueprint=blueprint, retrieved_chunks=chunks,
+        chapter_name=chapter["name"], question_count=1,
+        difficulty_distribution=blueprint.get("difficulty", {"medium": 1.0})
+    )
+    if not questions:
+        return False
+    q = questions[0]
+
+    pop_quiz = await ctx.pop_quiz_repo.create({
+        "telegram_group_id": str(chat_id),
+        "exam_id": uuid.UUID(str(exam_id)),
+        "chapter_name": chapter["name"],
+        "question_text": q["question_text"],
+        "options": q["options"],
+        "correct_answer": q["correct_answer"],
+        "explanation": q.get("explanation"),
+    })
+
+    text = f"🎯 Pop Quiz — {chapter['name']}\n\n{q['question_text']}\n"
+    for i, opt in enumerate(q["options"]):
+        text += f"\n{chr(65 + i)}. {opt}"
+    buttons = [[
+        InlineKeyboardButton(chr(65 + i), callback_data=f"pq_{pop_quiz.id}_{i}")
+        for i in range(len(q["options"]))
+    ]]
+
+    sent = await ctx.telegram_service.send_message(chat_id=chat_id, text=text, reply_markup=InlineKeyboardMarkup(buttons))
+    if sent:
+        await ctx.pop_quiz_repo.set_message_id(str(pop_quiz.id), sent.message_id)
+    return True
+
+
+async def _handle_pop_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str) -> None:
+    """FR-4.2/4.3 — the actual privacy mechanism the whole SRS is built
+    around (§2.3): grading and feedback happen ENTIRELY through this
+    private ephemeral alert. The group message is never edited, and
+    nothing about who answered what or whether they were right is ever
+    posted where other members can see it — two students tapping different
+    answers on the same question each get their own private popup and are
+    otherwise invisible to each other."""
+    query = update.callback_query
+    telegram_user_id = str(update.effective_user.id)
+
+    try:
+        _, pop_quiz_id, opt_idx_str = data.split("_", 2)
+        opt_idx = int(opt_idx_str)
+    except ValueError:
+        await query.answer("Something went wrong with that button.", show_alert=True)
+        return
+
+    async with AsyncSessionLocal() as db:
+        ctx = build_context(db)
+        pop_quiz = await ctx.pop_quiz_repo.get_by_id(pop_quiz_id)
+        if not pop_quiz:
+            await query.answer("This pop quiz has expired.", show_alert=True)
+            return
+
+        if await ctx.pop_quiz_repo.has_answered(pop_quiz_id, telegram_user_id):
+            await query.answer("You've already answered this one!", show_alert=True)
+            return
+
+        if opt_idx < 0 or opt_idx >= len(pop_quiz.options):
+            await query.answer("Something went wrong with that button.", show_alert=True)
+            return
+
+        chosen = pop_quiz.options[opt_idx]
+        is_correct = chosen == pop_quiz.correct_answer
+
+        recorded = await ctx.pop_quiz_repo.record_answer(pop_quiz_id, telegram_user_id, chosen, is_correct)
+        if recorded is None:
+            # Lost a race against another tap from the SAME student that
+            # landed first — the DB's unique constraint caught it, not a
+            # check-then-insert race in this code (there isn't one).
+            await query.answer("You've already answered this one!", show_alert=True)
+            return
+
+        feedback = "✅ Correct!" if is_correct else f"❌ Not quite. Correct answer: {pop_quiz.correct_answer}"
+        if pop_quiz.explanation:
+            # Telegram caps alert text around 200 chars — truncate the
+            # explanation to fit rather than risk the whole alert failing.
+            budget = 195 - len(feedback)
+            if budget > 20:
+                expl = pop_quiz.explanation
+                if len(expl) > budget:
+                    expl = expl[:budget - 1] + "…"
+                feedback += f"\n\n{expl}"
+
+        await query.answer(feedback[:200], show_alert=True)

@@ -24,6 +24,9 @@ def init_bot() -> Application:
     global application
     application = Application.builder().token(settings.telegram_bot_token).build()
     application.add_handler(CommandHandler("start", handlers.start_handler))
+    # Manual trigger for FR-4 (Gen-Z SRS pop quiz) ahead of the scheduled
+    # daily-push cron job — any group member can post one to their group.
+    application.add_handler(CommandHandler("popquiz", handlers.popquiz_command_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.message_handler))
     application.add_handler(CallbackQueryHandler(handlers.callback_handler))
     # Group auto-onboarding (Gen-Z SRS FR-1): fires when the bot's OWN status

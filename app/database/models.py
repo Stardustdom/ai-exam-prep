@@ -417,6 +417,58 @@ class GroupSubscription(Base):
     )
 
 
+class PopQuiz(Base):
+    """A single, stateless MCQ posted to a group (Gen-Z SRS FR-4) — no
+    LangGraph session, no ChatSession/Quiz row. The group message shows only
+    the question + A/B/C/D buttons; grading and feedback happen entirely
+    through PopQuizAnswer + an ephemeral answerCallbackQuery alert, per the
+    privacy mechanism in SRS §2.3. correct_answer/explanation live here
+    (not just in the LLM's original response) so a tap can be graded
+    without ever regenerating or re-fetching the question."""
+    __tablename__ = "pop_quizzes"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    telegram_group_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    telegram_message_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    exam_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"))
+    chapter_name: Mapped[Optional[str]] = mapped_column(String(255))
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    options: Mapped[List[str]] = mapped_column(ARRAY(Text), nullable=False)
+    correct_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    explanation: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    answers = relationship("PopQuizAnswer", back_populates="pop_quiz", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_pop_quizzes_telegram_group_id", "telegram_group_id"),
+    )
+
+
+class PopQuizAnswer(Base):
+    """One student's tap on one pop quiz. The unique constraint is what
+    actually enforces FR-4.3 ("answer once") — atomically, at the database
+    level, rather than a check-then-insert race in application code (the
+    same class of race that bit app.bot.handlers before it was fixed to
+    serialize per-chat: two rapid taps from the same student must not both
+    succeed)."""
+    __tablename__ = "pop_quiz_answers"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pop_quiz_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("pop_quizzes.id", ondelete="CASCADE"))
+    telegram_user_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    answered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    pop_quiz = relationship("PopQuiz", back_populates="answers")
+
+    __table_args__ = (
+        UniqueConstraint("pop_quiz_id", "telegram_user_id", name="uq_pop_quiz_answer_once"),
+        Index("idx_pop_quiz_answers_pop_quiz_id", "pop_quiz_id"),
+    )
+
+
 class SemanticCache(Base):
     __tablename__ = "semantic_cache"
     

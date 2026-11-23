@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.repositories import (
     ExamRepository, SemanticCacheRepository, ChapterRepository, TopicRepository,
     DocumentChunkRepository, QuizRepository, UserRepository, ChatSessionRepository,
-    BlueprintRepository, GroupSubscriptionRepository
+    BlueprintRepository, GroupSubscriptionRepository, PopQuizRepository
 )
 from app.services.embeddings import EmbeddingService
 from app.services.llm import LLMService
@@ -37,10 +37,14 @@ class BotContext:
     chat_session_repo: ChatSessionRepository
     quiz_repo: QuizRepository
     group_repo: GroupSubscriptionRepository
+    pop_quiz_repo: PopQuizRepository
+    blueprint_repo: BlueprintRepository
     telegram_service: TelegramService
     session_manager: SessionManagerAgent
     exam_resolver: ExamResolverAgent
     curriculum_resolver: CurriculumResolverAgent
+    retrieval_agent: RetrievalAgent
+    question_generator: QuestionGeneratorAgent
     graph: ExamGraph
 
 
@@ -55,6 +59,7 @@ def build_context(db: AsyncSession) -> BotContext:
     cache_repo = SemanticCacheRepository(db)
     blueprint_repo = BlueprintRepository(db)
     group_repo = GroupSubscriptionRepository(db)
+    pop_quiz_repo = PopQuizRepository(db)
 
     embedding_service = EmbeddingService()
     llm_service = LLMService()
@@ -88,8 +93,9 @@ def build_context(db: AsyncSession) -> BotContext:
     return BotContext(
         db=db, exam_repo=exam_repo, chapter_repo=chapter_repo, topic_repo=topic_repo,
         user_repo=user_repo, chat_session_repo=chat_session_repo, quiz_repo=quiz_repo,
-        group_repo=group_repo,
+        group_repo=group_repo, pop_quiz_repo=pop_quiz_repo, blueprint_repo=blueprint_repo,
         telegram_service=telegram_service,
         session_manager=session_manager, exam_resolver=exam_resolver,
-        curriculum_resolver=curriculum_resolver, graph=graph
+        curriculum_resolver=curriculum_resolver, retrieval_agent=retrieval_agent,
+        question_generator=question_generator, graph=graph
     )

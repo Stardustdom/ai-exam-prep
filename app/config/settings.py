@@ -1,6 +1,6 @@
 # app/config/settings.py
 from typing import List, Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     app_name: str = "AI Exam Preparation Platform"
     app_env: str = "development"
     debug: bool = True
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, v):
+        if isinstance(v, str):
+            if v.lower() in ("true", "1", "t", "yes", "debug", "dev", "development"):
+                return True
+            if v.lower() in ("false", "0", "f", "no", "release", "prod", "production"):
+                return False
+        return bool(v)
     secret_key: str = "your-secret-key-here-change-in-production"
     cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://localhost:8000"])
 
