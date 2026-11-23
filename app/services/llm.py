@@ -85,32 +85,62 @@ class AnthropicProvider(BaseLLMProvider):
 
 
 class GeminiProvider(BaseLLMProvider):
+    # Gemini regularly answers 503 ("high demand") / 429 (rate limit). Retry with
+    # backoff on the primary model, then fall back to lighter models.
+    FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-2.0-flash")
+    RETRIES_PER_MODEL = 3
+
     def __init__(self):
         from google import genai
         self.client = genai.Client(api_key=settings.gemini_api_key)
         self.model = settings.gemini_model
 
+    @staticmethod
+    def _is_transient(e: Exception) -> bool:
+        code = getattr(e, "code", None) or getattr(e, "status_code", None)
+        msg = str(e)
+        return code in (429, 500, 502, 503, 504) or any(
+            t in msg for t in ("UNAVAILABLE", "RESOURCE_EXHAUSTED", "overloaded", "high demand")
+        )
+
+    async def _call(self, contents, build_config, parse):
+        import asyncio
+        models = [self.model] + [m for m in self.FALLBACK_MODELS if m != self.model]
+        last: Exception = RuntimeError("no models tried")
+        for model in models:
+            for attempt in range(self.RETRIES_PER_MODEL):
+                try:
+                    response = await self.client.aio.models.generate_content(
+                        model=model, contents=contents, config=build_config()
+                    )
+                    return parse(response.text or "")
+                except Exception as e:
+                    last = e
+                    if not self._is_transient(e) and not isinstance(e, ValueError):
+                        raise
+                    logger.warning(f"Gemini {model} attempt {attempt + 1} failed: {str(e)[:150]}")
+                    await asyncio.sleep(1.5 * (2 ** attempt))
+        raise last
+
     async def generate_json(self, prompt: str, system: str = "") -> Dict[str, Any]:
         from google.genai import types
-        response = await self.client.aio.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
+        return await self._call(
+            prompt,
+            lambda: types.GenerateContentConfig(
                 system_instruction=system or "You are a helpful assistant. Respond with valid JSON only, no prose, no markdown fences.",
                 temperature=0.3,
                 response_mime_type="application/json",
             ),
+            _extract_json,
         )
-        return _extract_json(response.text or "")
 
     async def generate_text(self, prompt: str, temperature: float = 0.7) -> str:
         from google.genai import types
-        response = await self.client.aio.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=temperature),
+        return await self._call(
+            prompt,
+            lambda: types.GenerateContentConfig(temperature=temperature),
+            lambda t: t,
         )
-        return response.text or ""
 
 
 def _build_provider() -> BaseLLMProvider:
