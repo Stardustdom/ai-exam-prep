@@ -404,7 +404,7 @@ class ExamGraph:
             return state
 
         except Exception as e:
-            logger.error(f"Quiz generation failed: {e}")
+            logger.error(f"Quiz generation failed: {e!r}", exc_info=True)
             state.error = "Sorry, I couldn't generate the test right now. Please choose a chapter/topic to try again."
             state.chapter_id, state.chapter_name = "", ""  # "" not None — see ExamSessionState.error's docstring
             return state

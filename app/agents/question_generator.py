@@ -40,6 +40,7 @@ class QuestionGeneratorAgent:
         """
         # Prepare context from chunks
         context = self._prepare_context(retrieved_chunks)
+        logger.info(f"[quizdiag] chapter={chapter_name!r} chunks={len(retrieved_chunks)} count={question_count}")
         
         # Determine question distribution
         distribution = self._calculate_distribution(
@@ -93,6 +94,7 @@ class QuestionGeneratorAgent:
             # Parse and validate questions
             questions = response.get("questions", [])
             validated_questions = []
+            logger.info(f"[quizdiag] {difficulty}: LLM returned {len(questions)} raw questions (asked {count}), context chars={len(context)}")
             
             for q in questions:
                 if self._validate_question(q):
@@ -106,10 +108,11 @@ class QuestionGeneratorAgent:
                     
                     validated_questions.append(q)
             
+            logger.info(f"[quizdiag] {difficulty}: {len(validated_questions)}/{len(questions)} passed validation")
             return validated_questions
             
         except Exception as e:
-            logger.error(f"Failed to generate questions: {e}")
+            logger.error(f"Failed to generate questions: {e}", exc_info=True)
             return []
     
     def _build_generation_prompt(
