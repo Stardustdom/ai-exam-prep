@@ -59,6 +59,17 @@ async def shutdown_event():
     await close_checkpointer()
 
 
+@app.get("/")
+async def root():
+    return {
+        "service": settings.app_name,
+        "status": "running",
+        "health": "/health",
+        "docs": "/docs",
+        "admin": "/admin/",
+    }
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": settings.app_name, "environment": settings.app_env}
