@@ -8,8 +8,9 @@
 from abc import ABC, abstractmethod
 from typing import List
 from app.config.settings import settings
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential, before_sleep_log
+from tenacity import retry, retry_if_exception, stop_after_attempt, before_sleep_log
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,15 @@ def _is_rate_limit_error(exc: BaseException) -> bool:
     return "429" in msg or "RESOURCE_EXHAUSTED" in msg or "rate_limit" in msg.lower()
 
 
+def _wait_for_rate_limit(retry_state) -> float:
+    """Honor the server's own "Please retry in 32.1s" hint; otherwise back off exponentially."""
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    m = re.search(r"retry in ([\d.]+)s", str(exc)) if exc else None
+    if m:
+        return min(float(m.group(1)) + 1, 65)
+    return min(max(5, 2 * 2 ** retry_state.attempt_number), 60)
+
+
 # Retries only actual rate-limit errors (with backoff, since the free tier's
 # own error already tells you to "retry in 30s") and re-raises anything else
 # or an exhausted retry immediately, so EmbeddingService's soft-fail-to-[]
@@ -30,7 +40,7 @@ def _is_rate_limit_error(exc: BaseException) -> bool:
 _retry_on_rate_limit = retry(
     retry=retry_if_exception(_is_rate_limit_error),
     stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=2, min=5, max=60),
+    wait=_wait_for_rate_limit,
     before_sleep=before_sleep_log(logger, logging.WARNING),
     reraise=True,
 )
