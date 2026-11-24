@@ -32,7 +32,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: "gemini-2.5-flash"
+        value: "gemini-3.8-flash"
       - key: GEMINI_EMBEDDING_MODEL
         value: "gemini-embedding-001"
       - key: OPENAI_API_KEY

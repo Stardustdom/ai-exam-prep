@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     azure_openai_endpoint: Optional[str] = None
     azure_openai_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.8-flash"
 
     # Embeddings are a separate provider choice from llm_provider, since not
     # every LLM provider has a first-party embedding model (Anthropic doesn't;

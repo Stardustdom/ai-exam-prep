@@ -87,7 +87,7 @@ class AnthropicProvider(BaseLLMProvider):
 class GeminiProvider(BaseLLMProvider):
     # Gemini regularly answers 503 ("high demand") / 429 (rate limit). Retry with
     # backoff on the primary model, then fall back to lighter models.
-    FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-2.0-flash")
+    FALLBACK_MODELS = ("gemini-3.8-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash")
     RETRIES_PER_MODEL = 3
 
     def __init__(self):
@@ -103,6 +103,11 @@ class GeminiProvider(BaseLLMProvider):
             t in msg for t in ("UNAVAILABLE", "RESOURCE_EXHAUSTED", "overloaded", "high demand")
         )
 
+    @staticmethod
+    def _is_model_unavailable(e: Exception) -> bool:
+        code = getattr(e, "code", None) or getattr(e, "status_code", None)
+        return code == 404 or "NOT_FOUND" in str(e)
+
     async def _call(self, contents, build_config, parse):
         import asyncio
         models = [self.model] + [m for m in self.FALLBACK_MODELS if m != self.model]
@@ -116,6 +121,10 @@ class GeminiProvider(BaseLLMProvider):
                     return parse(response.text or "")
                 except Exception as e:
                     last = e
+                    if self._is_model_unavailable(e):
+                        # Retired / unknown model: retrying is pointless, try the next one.
+                        logger.warning(f"Gemini {model} unavailable, trying next model: {str(e)[:150]}")
+                        break
                     if not self._is_transient(e) and not isinstance(e, ValueError):
                         raise
                     logger.warning(f"Gemini {model} attempt {attempt + 1} failed: {str(e)[:150]}")
