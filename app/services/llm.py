@@ -87,7 +87,7 @@ class AnthropicProvider(BaseLLMProvider):
 class GeminiProvider(BaseLLMProvider):
     # Gemini regularly answers 503 ("high demand") / 429 (rate limit). Retry with
     # backoff on the primary model, then fall back to lighter models.
-    FALLBACK_MODELS = ("gemini-3.8-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash")
+    FALLBACK_MODELS = ("gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite")
     RETRIES_PER_MODEL = 3
 
     def __init__(self):
@@ -120,7 +120,8 @@ class GeminiProvider(BaseLLMProvider):
                     )
                     return parse(response.text or "")
                 except Exception as e:
-                    last = e
+                    if not (self._is_model_unavailable(e) and self._is_transient(last)):
+                        last = e  # keep the real (e.g. 503) error rather than a later 404
                     if self._is_model_unavailable(e):
                         # Retired / unknown model: retrying is pointless, try the next one.
                         logger.warning(f"Gemini {model} unavailable, trying next model: {str(e)[:150]}")
