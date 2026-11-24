@@ -8,7 +8,7 @@ from app.database.models import (
     Exam, ExamAlias, Resource, Document, DocumentChunk,
     Subject, Chapter, Topic, SamplePaper, SampleQuestion,
     ExamBlueprint, User, ChatSession, Quiz, SemanticCache,
-    ProcessingStatus, GroupSubscription, PopQuiz, PopQuizAnswer
+    ProcessingStatus, GroupSubscription, PopQuiz, PopQuizAnswer, NameEmbedding
 )
 from sqlalchemy.exc import IntegrityError
 
@@ -253,6 +253,27 @@ class ChapterRepository(BaseRepository):
     async def get_all(self) -> List[Chapter]:
         result = await self.session.execute(select(Chapter))
         return result.scalars().all()
+
+class NameEmbeddingRepository(BaseRepository):
+    async def get_for_exam(self, exam_id: str, model: str) -> Dict[str, List[float]]:
+        result = await self.session.execute(
+            select(NameEmbedding).where(
+                NameEmbedding.exam_id == uuid.UUID(exam_id), NameEmbedding.model == model
+            )
+        )
+        return {r.name: r.embedding for r in result.scalars().all()}
+
+    async def save_many(self, exam_id: str, model: str, items: Dict[str, List[float]]) -> None:
+        for name, vec in items.items():
+            self.session.add(NameEmbedding(
+                exam_id=uuid.UUID(exam_id), name=name[:255], model=model, embedding=vec
+            ))
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            # A concurrent request stored the same names first; harmless.
+            await self.session.rollback()
+
 
 class TopicRepository(BaseRepository):
     async def create(self, data: Dict[str, Any]) -> Topic:

@@ -7,6 +7,7 @@
 from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.repositories import (
+    NameEmbeddingRepository,
     ExamRepository, SemanticCacheRepository, ChapterRepository, TopicRepository,
     DocumentChunkRepository, QuizRepository, UserRepository, ChatSessionRepository,
     BlueprintRepository, GroupSubscriptionRepository, PopQuizRepository
@@ -71,7 +72,10 @@ def build_context(db: AsyncSession) -> BotContext:
 
     session_manager = SessionManagerAgent(user_repo, chat_session_repo, telegram_service)
     exam_resolver = ExamResolverAgent(exam_repo, cache_repo, embedding_service, cache_service, llm_service)
-    curriculum_resolver = CurriculumResolverAgent(chapter_repo, topic_repo, embedding_service, cache_service, llm_service)
+    curriculum_resolver = CurriculumResolverAgent(
+        chapter_repo, topic_repo, embedding_service, cache_service, llm_service,
+        NameEmbeddingRepository(db)
+    )
     retrieval_agent = RetrievalAgent(chunk_repo, vector_store, embedding_service)
     question_generator = QuestionGeneratorAgent(llm_service, embedding_service, quiz_repo)
     quiz_manager = QuizManagerAgent(quiz_repo, telegram_service)

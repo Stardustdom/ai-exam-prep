@@ -231,6 +231,24 @@ class Topic(Base):
     )
 
 
+class NameEmbedding(Base):
+    """Persisted embedding of a chapter/topic name, so a restart or cold cache
+    doesn't re-spend embedding quota on an unchanged curriculum."""
+    __tablename__ = "name_embeddings"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    exam_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("exams.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding: Mapped[List[float]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("exam_id", "name", "model", name="uq_name_embedding"),
+        Index("idx_name_embeddings_exam_id", "exam_id"),
+    )
+
+
 class SamplePaper(Base):
     __tablename__ = "sample_papers"
     

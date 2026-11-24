@@ -43,13 +43,15 @@ class CurriculumResolverAgent:
         topic_repo: TopicRepository,
         embedding_service: EmbeddingService,
         semantic_cache_service: SemanticCacheService,
-        llm_service: LLMService
+        llm_service: LLMService,
+        name_embedding_repo=None
     ):
         self.chapter_repo = chapter_repo
         self.topic_repo = topic_repo
         self.embedding_service = embedding_service
         self.semantic_cache_service = semantic_cache_service
         self.llm_service = llm_service
+        self.name_embedding_repo = name_embedding_repo
 
     async def is_off_topic_message(self, text: str) -> bool:
         """Call only after resolve_chapter() has already failed to match —
@@ -160,7 +162,7 @@ class CurriculumResolverAgent:
             if cached and cached[0] == candidate_names:
                 candidate_embeddings = cached[1]
             else:
-                candidate_embeddings = await self.embedding_service.embed_batch(list(candidate_names))
+                candidate_embeddings = await self._load_or_embed(exam_id, candidate_names)
                 if candidate_embeddings and all(candidate_embeddings):
                     _candidate_embedding_cache[exam_id] = (candidate_names, candidate_embeddings)
 
@@ -181,6 +183,29 @@ class CurriculumResolverAgent:
         except Exception as e:
             logger.error(f"Semantic chapter match failed: {e}")
         return None
+
+    async def _load_or_embed(self, exam_id: str, names: Tuple[str, ...]) -> List[List[float]]:
+        """Names' embeddings from the DB where stored; only missing ones hit the API."""
+        repo = self.name_embedding_repo
+        if repo is None:
+            return await self.embedding_service.embed_batch(list(names))
+        model = getattr(settings, f"{settings.embedding_provider}_embedding_model", settings.embedding_provider)
+        try:
+            stored = await repo.get_for_exam(exam_id, model)
+        except Exception as e:
+            logger.warning(f"Could not read stored name embeddings: {e}")
+            stored = {}
+        missing = [n for n in dict.fromkeys(names) if n not in stored]
+        if missing:
+            vecs = await self.embedding_service.embed_batch(missing)
+            fresh = {n: v for n, v in zip(missing, vecs) if v}
+            if fresh:
+                try:
+                    await repo.save_many(exam_id, model, fresh)
+                except Exception as e:
+                    logger.warning(f"Could not store name embeddings: {e}")
+                stored.update(fresh)
+        return [stored.get(n, []) for n in names]
 
     @staticmethod
     def _cosine_similarity(a: List[float], b: List[float]) -> float:
